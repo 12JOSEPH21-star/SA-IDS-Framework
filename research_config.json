@@ -1,0 +1,33 @@
+{
+  "data_path": "sample_weather.csv",
+  "output_dir": "outputs/research_run",
+  "timestamp_column": "timestamp",
+  "station_id_column": "station_id",
+  "target_column": "temperature",
+  "latitude_column": "latitude",
+  "longitude_column": "longitude",
+  "cost_column": "cost",
+  "always_available_columns": [
+    "elevation"
+  ],
+  "sensor_feature_columns": [
+    "humidity",
+    "pressure"
+  ],
+  "train_ratio": 0.8,
+  "neighbor_count": 3,
+  "removal_ratios": [
+    0.1,
+    0.3,
+    0.5,
+    0.7
+  ],
+  "ridge_alpha": 1.0,
+  "ranking_strategy": "cost_efficiency",
+  "max_rmse_increase_pct": 15.0,
+  "sparse_focus_min_ratio": 0.5,
+  "sparse_baseline_tolerance_pct": 5.0,
+  "calibration_ratio": 0.2,
+  "conformal_alpha": 0.1,
+  "idw_power": 2.0
+}

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.task-cli.json
+.venv*/
+outputs/
+data/
+*.zip
+*.nc
+*.svg
+*.docx
+review/*_extracted.txt
