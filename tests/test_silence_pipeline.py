@@ -23,6 +23,7 @@ class SilenceAwarePipelineTests(unittest.TestCase):
             StateTrainingConfig,
         )
         from reliability import ConformalConfig
+        from reliability import ConformalPredictor
 
         self.torch = torch
         self.SilenceAwareIDS = SilenceAwareIDS
@@ -33,6 +34,7 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.StateTrainingConfig = StateTrainingConfig
         self.MissingnessTrainingConfig = MissingnessTrainingConfig
         self.ConformalConfig = ConformalConfig
+        self.ConformalPredictor = ConformalPredictor
 
         torch.manual_seed(0)
         self.x_train = torch.linspace(0.0, 1.0, 12).unsqueeze(-1)
@@ -91,6 +93,8 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertIn("gp_plus_sensor_conditional_missingness", variants)
         self.assertIn("gp_plus_joint_variational_missingness", variants)
         self.assertIn("gp_plus_joint_jvi_training", variants)
+        self.assertIn("gp_plus_joint_generative_missingness", variants)
+        self.assertIn("gp_plus_joint_generative_jvi_training", variants)
         self.assertIn("gp_plus_pattern_mixture_missingness", variants)
         self.assertIn("relational_reliability_baseline", variants)
         self.assertIn("myopic_policy_baseline", variants)
@@ -104,10 +108,20 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         )
         self.assertEqual(variants["gp_plus_joint_variational_missingness"].state_training.training_strategy, "sequential")
         self.assertEqual(variants["gp_plus_joint_jvi_training"].state_training.training_strategy, "joint_variational")
+        self.assertEqual(
+            variants["gp_plus_joint_generative_missingness"].missingness.inference_strategy,
+            "joint_generative",
+        )
+        self.assertEqual(
+            variants["gp_plus_joint_generative_jvi_training"].state_training.training_strategy,
+            "joint_generative",
+        )
         self.assertEqual(variants["myopic_policy_baseline"].policy.planning_strategy, "lazy_greedy")
         self.assertEqual(variants["ppo_warmstart_baseline"].policy.planning_strategy, "ppo_warmstart")
         self.assertEqual(variants["rollout_policy_baseline"].policy.planning_strategy, "non_myopic_rollout")
         self.assertEqual(variants["full_model"].policy.planning_strategy, "ppo_online")
+        self.assertEqual(variants["full_model"].missingness.inference_strategy, "joint_generative")
+        self.assertTrue(variants["full_model"].missingness.use_temporal_transition_prior)
 
     def test_sparse_gp_requires_explicit_dims_for_high_dim_inputs(self) -> None:
         with self.assertRaises(ValueError):
@@ -234,6 +248,92 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertEqual(outputs["sensor_state_probs"].shape[0], self.x_eval.shape[0])
         self.assertTrue(outputs["available"].all().item())
 
+    def test_fault_detection_calibrates_and_returns_fault_flags(self) -> None:
+        observation = self.ObservationModelConfig(
+            diagnosis_mode="temporal",
+            use_dbn=True,
+            use_pi_ssd=True,
+            use_latent_ode=True,
+            fault_target_false_alarm_rate=0.1,
+        )
+        pipeline = self._build_pipeline(use_m3=False, observation=observation)
+        pipeline.fit_state_model(self.x_train, self.y_train)
+        threshold = pipeline.calibrate_fault_detection(self.x_train, self.y_train, batch_size=4)
+        outputs = pipeline.detect_faults(self.x_eval, self.y_eval, batch_size=4)
+        self.assertGreater(float(threshold.item()), 0.0)
+        self.assertIn("fault_score", outputs)
+        self.assertIn("fault_probability", outputs)
+        self.assertIn("fault_flag", outputs)
+        self.assertEqual(outputs["fault_score"].shape[0], self.x_eval.shape[0])
+        self.assertEqual(outputs["fault_probability"].shape[0], self.x_eval.shape[0])
+        self.assertEqual(outputs["fault_flag"].shape[0], self.x_eval.shape[0])
+
+    def test_tune_fault_threshold_updates_threshold_from_labeled_scores(self) -> None:
+        pipeline = self._build_pipeline(use_m3=False)
+        score = self.torch.tensor([0.1, 0.2, 0.4, 0.8, 1.2, 1.5], dtype=self.torch.float32)
+        labels = self.torch.tensor([0, 0, 0, 1, 1, 1], dtype=self.torch.float32)
+        threshold = pipeline.tune_fault_threshold(score, labels)
+        self.assertGreaterEqual(float(threshold.item()), 0.2)
+        self.assertLessEqual(float(threshold.item()), 1.2)
+
+    def test_tune_fault_threshold_respects_false_alarm_budget(self) -> None:
+        pipeline = self._build_pipeline(use_m3=False)
+        score = self.torch.tensor([0.1, 0.2, 0.25, 0.35, 0.45, 0.8, 1.1], dtype=self.torch.float32)
+        labels = self.torch.tensor([0, 0, 0, 0, 1, 1, 1], dtype=self.torch.float32)
+        permissive = pipeline.tune_fault_threshold(score, labels, target_false_alarm_rate=0.5, far_penalty_weight=0.0)
+        conservative = pipeline.tune_fault_threshold(
+            score,
+            labels,
+            target_false_alarm_rate=0.05,
+            far_penalty_weight=2.0,
+        )
+        self.assertGreaterEqual(float(conservative.item()), float(permissive.item()))
+
+    def test_fault_score_uses_station_temporal_mismatch(self) -> None:
+        torch = self.torch
+        observation = self.ObservationModelConfig(
+            fault_score_state_weight=0.0,
+            fault_score_embedding_weight=0.0,
+            fault_score_temporal_weight=1.0,
+            fault_score_persistence_weight=0.0,
+        )
+        pipeline = self._build_pipeline(use_m3=False, observation=observation)
+        X = torch.tensor(
+            [
+                [37.0, 127.0, 0.0],
+                [37.0, 127.0, 1.0],
+                [37.0, 127.0, 2.0],
+            ],
+            dtype=torch.float32,
+        )
+        y = torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32)
+        fake_silence = {
+            "residuals": torch.zeros(3),
+            "threshold": torch.ones(3),
+            "diagnostic_score": torch.zeros(3),
+            "diagnosis_embedding": torch.zeros(3, observation.diagnosis_embedding_dim),
+            "dynamic_silence": torch.zeros(3, dtype=torch.bool),
+            "sensor_state_probs": torch.tensor(
+                [[1.0, 0.0, 0.0, 0.0]] * 3,
+                dtype=torch.float32,
+            ),
+            "sensor_state_labels": torch.zeros(3, dtype=torch.long),
+            "state_mean": torch.tensor([1.0, 2.5, 4.0], dtype=torch.float32),
+            "state_var": torch.ones(3, dtype=torch.float32),
+            "available": torch.ones(3, dtype=torch.bool),
+        }
+        metadata = {"sensor_instance": torch.zeros(3, dtype=torch.long)}
+        with mock.patch.object(pipeline, "detect_silence", return_value=fake_silence):
+            outputs = pipeline.detect_faults(
+                X,
+                y,
+                sensor_metadata=metadata,
+                fault_threshold=0.2,
+            )
+        self.assertGreater(outputs["fault_score"][1].item(), outputs["fault_score"][0].item())
+        self.assertGreater(outputs["fault_score"][2].item(), outputs["fault_score"][0].item())
+        self.assertTrue(outputs["fault_flag"][1].item())
+
     def test_temporal_nwp_diagnosis_exposes_sequence_score(self) -> None:
         observation = self.ObservationModelConfig(
             diagnosis_mode="temporal_nwp",
@@ -273,6 +373,41 @@ class SilenceAwarePipelineTests(unittest.TestCase):
                 with mock.patch.object(pipeline.missingness_model, "predict_proba", side_effect=fake_predict_proba):
                     probabilities = pipeline.predict_missingness(self.x_eval, y=self.y_eval, batch_size=2)
         self.assertEqual(probabilities.shape[0], 8)
+
+    def test_evaluate_predictions_only_scores_observed_rows(self) -> None:
+        pipeline = self._build_pipeline(use_m2=False, use_m3=False, use_m5=False)
+        y_eval = self.y_eval.clone()
+        y_eval[2] = float("nan")
+        y_eval[5] = float("nan")
+
+        def fake_predict_state(X, *, batch_size=None, include_observation_noise=False):
+            self.assertEqual(int(X.shape[0]), 6)
+            return self.torch.zeros(X.shape[0]), self.torch.ones(X.shape[0])
+
+        with mock.patch.object(pipeline, "predict_state", side_effect=fake_predict_state):
+            metrics = pipeline.evaluate_predictions(self.x_eval, y_eval, batch_size=2)
+        self.assertIn("rmse", metrics)
+
+    def test_evaluate_predictions_emits_progress_heartbeat(self) -> None:
+        pipeline = self._build_pipeline(use_m2=False, use_m3=False, use_m5=False)
+        events: list[str] = []
+
+        def record(step: str, payload: dict[str, object]) -> None:
+            self.assertIsInstance(payload, dict)
+            events.append(step)
+
+        pipeline.fit_state_model(self.x_train, self.y_train)
+        metrics = pipeline.evaluate_predictions(
+            self.x_eval,
+            self.y_eval,
+            batch_size=2,
+            progress_callback=record,
+        )
+        self.assertIn("rmse", metrics)
+        self.assertEqual(events[0], "start")
+        self.assertIn("predictive_summary_complete", events)
+        self.assertIn("metrics_complete", events)
+        self.assertEqual(events[-1], "completed")
 
     def test_select_sensors_uses_deployment_safe_missingness_features(self) -> None:
         missingness = self.MissingMechanismConfig(
@@ -402,6 +537,14 @@ class SilenceAwarePipelineTests(unittest.TestCase):
             metrics = pipeline.evaluate_predictions(self.x_eval, self.y_eval, batch_size=2)
         self.assertIn("final_adaptive_epsilon", metrics)
 
+    def test_adaptive_epsilon_decreases_after_miss(self) -> None:
+        predictor = self.ConformalPredictor(self.ConformalConfig(mode="adaptive", adaptation_rate=0.1))
+        predictor.reset_adaptation(epsilon=0.1)
+        updated = predictor.update_adaptive_epsilon(error=1.0)
+        self.assertLess(updated, 0.1)
+        recovered = predictor.update_adaptive_epsilon(error=0.0)
+        self.assertGreater(recovered, updated)
+
     def test_relational_adaptive_reliability_reports_neighbor_error(self) -> None:
         reliability = self.ConformalConfig(
             mode="relational_adaptive",
@@ -441,6 +584,35 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertEqual(lower.shape[0], self.x_eval.shape[0])
         self.assertEqual(upper.shape[0], self.x_eval.shape[0])
 
+    def test_graph_corel_quantiles_respect_base_floor(self) -> None:
+        reliability = self.ConformalConfig(
+            mode="graph_corel",
+            graph_training_steps=2,
+            graph_k_neighbors=2,
+            graph_message_passing_steps=1,
+            graph_score_weight=1.0,
+            graph_min_quantile_factor=0.95,
+        )
+        pipeline = self._build_pipeline(use_m5=True, reliability=reliability)
+
+        def fake_predict_state(X, *, batch_size=None, include_observation_noise=False):
+            return self.torch.zeros(X.shape[0]), self.torch.ones(X.shape[0])
+
+        with mock.patch.object(pipeline, "predict_state", side_effect=fake_predict_state):
+            pipeline.calibrate_reliability(self.x_eval, self.y_eval, batch_size=2)
+            base_q = pipeline.reliability_model.quantile(
+                pipeline.reliability_model._calibration_scores,
+                epsilon=pipeline.reliability_model.adaptive_epsilon,
+            )
+            lower, upper, metadata = pipeline.predict_interval(self.x_eval, y=self.y_eval, batch_size=2)
+        observed_quantile = self.torch.tensor(float(metadata["q_hat"]), dtype=base_q.dtype)
+        self.assertGreaterEqual(
+            float(observed_quantile.item()) + 1e-6,
+            float((0.95 * base_q).item()),
+        )
+        self.assertEqual(lower.shape[0], self.x_eval.shape[0])
+        self.assertEqual(upper.shape[0], self.x_eval.shape[0])
+
     def test_ablation_report_flags_are_variant_specific(self) -> None:
         pipeline = self._build_pipeline()
         pattern_variant = pipeline.spawn_ablation_variant("gp_plus_pattern_mixture_missingness")
@@ -448,6 +620,7 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         myopic_variant = pipeline.spawn_ablation_variant("myopic_policy_baseline")
         ppo_warm_variant = pipeline.spawn_ablation_variant("ppo_warmstart_baseline")
         joint_jvi_variant = pipeline.spawn_ablation_variant("gp_plus_joint_jvi_training")
+        generative_variant = pipeline.spawn_ablation_variant("gp_plus_joint_generative_jvi_training")
         rollout_variant = pipeline.spawn_ablation_variant("rollout_policy_baseline")
         full_variant = pipeline.spawn_ablation_variant("full_model")
 
@@ -456,6 +629,7 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         myopic_flags = myopic_variant.ablation_report()["comparison_grid"]
         ppo_warm_flags = ppo_warm_variant.ablation_report()["comparison_grid"]
         joint_jvi_flags = joint_jvi_variant.ablation_report()["comparison_grid"]
+        generative_flags = generative_variant.ablation_report()["comparison_grid"]
         rollout_flags = rollout_variant.ablation_report()["comparison_grid"]
         full_flags = full_variant.ablation_report()["comparison_grid"]
         full_report = full_variant.ablation_report()
@@ -471,18 +645,25 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertFalse(ppo_warm_flags["full_model"])
         self.assertTrue(joint_jvi_flags["gp_plus_joint_jvi_training"])
         self.assertFalse(joint_jvi_flags["gp_plus_joint_variational_missingness"])
+        self.assertTrue(generative_flags["gp_plus_joint_generative_jvi_training"])
+        self.assertFalse(generative_flags["gp_plus_joint_generative_missingness"])
         self.assertTrue(rollout_flags["rollout_policy_baseline"])
         self.assertFalse(rollout_flags["full_model"])
         self.assertTrue(full_flags["full_model"])
         self.assertFalse(full_flags["gp_plus_conformal_reliability"])
         self.assertFalse(full_flags["gp_plus_sensor_conditional_missingness"])
         self.assertFalse(full_flags["gp_plus_joint_variational_missingness"])
+        self.assertFalse(full_flags["gp_plus_joint_generative_missingness"])
+        self.assertTrue(full_report["missingness_temporal_transition_prior"])
         self.assertIn("diagnosis_mode", full_report)
         self.assertIn("diagnosis_representation", full_report)
         self.assertIn("diagnosis_temporal_model", full_report)
         self.assertIn("diagnosis_curriculum", full_report)
         self.assertIn("diagnosis_latent_dynamics", full_report)
         self.assertIn("missingness_sensor_health_latent", full_report)
+        self.assertIn("missingness_temporal_transition_prior", full_report)
+        self.assertIn("missingness_transition_group_key", full_report)
+        self.assertIn("missingness_transition_time_index", full_report)
         self.assertIn("reliability_mode", full_report)
         self.assertIn("reliability_relational", full_report)
         self.assertIn("reliability_graph_corel", full_report)
@@ -563,6 +744,48 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertIn("joint_missingness_loss", summary.state_history)
         self.assertIsNotNone(summary.missingness_history)
         self.assertIn("health_kl_loss", summary.missingness_history)
+
+    def test_joint_generative_training_populates_state_and_missingness_histories(self) -> None:
+        missingness = self.MissingMechanismConfig(
+            num_sensor_types=2,
+            num_sensor_groups=2,
+            include_s=True,
+            inference_strategy="joint_generative",
+            use_sensor_health_latent=True,
+            generative_samples=3,
+            use_temporal_transition_prior=True,
+            transition_time_index=0,
+            transition_group_key="sensor_group",
+        )
+        pipeline = self.SilenceAwareIDS(
+            self.SilenceAwareIDSConfig(
+                state=self.SparseGPConfig(input_dim=1, inducing_points=4),
+                observation=self.ObservationModelConfig(),
+                missingness=missingness,
+                state_training=self.StateTrainingConfig(
+                    epochs=1,
+                    batch_size=4,
+                    training_strategy="joint_generative",
+                ),
+                missingness_training=self.MissingnessTrainingConfig(epochs=1, batch_size=4),
+                use_m2=True,
+                use_m3=True,
+                use_m5=False,
+                homogeneous_missingness=False,
+                sensor_conditional_missingness=True,
+            )
+        )
+        summary = pipeline.fit(
+            self.x_train,
+            self.y_train,
+            missing_indicator_train=self.missing_indicator,
+            sensor_metadata_train=self.sensor_metadata,
+        )
+        self.assertIn("state_loss", summary.state_history)
+        self.assertIn("joint_missingness_loss", summary.state_history)
+        self.assertIsNotNone(summary.missingness_history)
+        self.assertIn("reconstruction_loss", summary.missingness_history)
+        self.assertIn("transition_loss", summary.missingness_history)
 
     def test_infer_sensor_health_returns_latent_health_summary(self) -> None:
         pipeline = self._build_pipeline()

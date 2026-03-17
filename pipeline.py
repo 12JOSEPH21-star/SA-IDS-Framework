@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field, replace
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import gpytorch
 import torch
@@ -24,6 +25,20 @@ from reliability import ConformalConfig, ConformalPredictor
 LOGGER = logging.getLogger(__name__)
 
 
+def _emit_progress_event(
+    progress_callback: Callable[[str, dict[str, Any]], None] | None,
+    step: str,
+    **payload: Any,
+) -> None:
+    """Emit a lightweight progress event without breaking the caller."""
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(step, payload)
+    except Exception:
+        LOGGER.debug("Progress callback failed for step %s.", step, exc_info=True)
+
+
 def _slice_optional(tensor: Tensor | None, index: Tensor) -> Tensor | None:
     """Slice an optional tensor batch."""
     if tensor is None:
@@ -38,6 +53,7 @@ def _slice_metadata(
     """Slice sensor metadata for minibatched missingness training."""
     batch = SensorMetadataBatch.from_input(metadata)
     return SensorMetadataBatch(
+        sensor_instance=_slice_optional(batch.sensor_instance, index),
         sensor_type=_slice_optional(batch.sensor_type, index),
         sensor_group=_slice_optional(batch.sensor_group, index),
         sensor_modality=_slice_optional(batch.sensor_modality, index),
@@ -77,7 +93,7 @@ class StateTrainingConfig:
     joint_missingness_weight: float = 1.0
 
     def __post_init__(self) -> None:
-        valid_strategies = {"sequential", "joint_variational"}
+        valid_strategies = {"sequential", "joint_variational", "joint_generative"}
         if self.training_strategy not in valid_strategies:
             raise ValueError(f"training_strategy must be one of {sorted(valid_strategies)}.")
         if self.epochs <= 0:
@@ -170,6 +186,8 @@ class SilenceAwareIDS(nn.Module):
         self.missingness_model = MissingMechanism(missingness_config) if self.use_m3 else None
         self.policy_optimizer = LazyGreedyOptimizer(self.config.policy)
         self.reliability_model = ConformalPredictor(self.config.reliability) if self.use_m5 else None
+        self._fault_detection_threshold: float | None = None
+        self._fault_component_stats: dict[str, tuple[float, float]] | None = None
 
     @staticmethod
     def _coerce_dataclass(
@@ -280,6 +298,13 @@ class SilenceAwareIDS(nn.Module):
             health_kl_weight=base.health_kl_weight,
             health_reconstruction_weight=base.health_reconstruction_weight,
             variational_logvar_clip=base.variational_logvar_clip,
+            generative_samples=base.generative_samples,
+            use_temporal_transition_prior=base.use_temporal_transition_prior,
+            transition_time_index=base.transition_time_index,
+            transition_group_key=base.transition_group_key,
+            transition_hidden_dim=base.transition_hidden_dim,
+            transition_weight=base.transition_weight,
+            health_transition_weight=base.health_transition_weight,
         )
 
     @staticmethod
@@ -455,8 +480,17 @@ class SilenceAwareIDS(nn.Module):
         """
         if not self.use_m3 or self.missingness_model is None:
             raise RuntimeError("Joint JVI training requires M3 to be enabled.")
-        if self.missingness_model.config.inference_strategy != "joint_variational":
-            raise RuntimeError("Joint JVI training requires M3 inference_strategy='joint_variational'.")
+        valid_joint_strategies = {"joint_variational", "joint_generative"}
+        if self.missingness_model.config.inference_strategy not in valid_joint_strategies:
+            raise RuntimeError(
+                "Joint JVI training requires M3 inference_strategy in "
+                f"{sorted(valid_joint_strategies)}."
+            )
+        if self.config.state_training.training_strategy != self.missingness_model.config.inference_strategy:
+            raise RuntimeError(
+                "Joint state training_strategy must match missingness inference_strategy "
+                "for coupled M1+M3 training."
+            )
 
         X = _coerce_tensor_2d(X, name="X")
         y = _coerce_tensor_1d(y, name="y")
@@ -507,6 +541,8 @@ class SilenceAwareIDS(nn.Module):
             "kl_loss": [],
             "health_kl_loss": [],
             "health_reconstruction_loss": [],
+            "transition_loss": [],
+            "health_transition_loss": [],
         }
 
         for epoch in range(active_epochs):
@@ -518,6 +554,8 @@ class SilenceAwareIDS(nn.Module):
             epoch_kl_loss = 0.0
             epoch_health_kl_loss = 0.0
             epoch_health_reconstruction_loss = 0.0
+            epoch_transition_loss = 0.0
+            epoch_health_transition_loss = 0.0
             batches = self._iterate_batches(X.shape[0], active_batch_size, device=X.device)
 
             for batch_index in batches:
@@ -537,6 +575,13 @@ class SilenceAwareIDS(nn.Module):
                 latent_var = torch.clamp(output_full.variance, min=self.config.state.variance_floor)
                 batch_metadata = _slice_metadata(sensor_metadata, batch_index)
                 batch_observation_available = batch_observed.float()
+                needs_raw_x = (
+                    self.missingness_model.config.include_x
+                    or (
+                        self.missingness_model.config.inference_strategy == "joint_generative"
+                        and self.missingness_model.config.use_temporal_transition_prior
+                    )
+                )
                 loss_components = self.missingness_model.compute_loss_components(
                     target_missing=batch_missing,
                     z_mean=latent_mean,
@@ -550,7 +595,7 @@ class SilenceAwareIDS(nn.Module):
                     dynamic_residual=_slice_optional(dynamic_residual, batch_index),
                     dynamic_threshold=_slice_optional(dynamic_threshold, batch_index),
                     dynamic_feature_available=_slice_optional(dynamic_feature_available, batch_index),
-                    X=batch_x if self.missingness_model.config.include_x else None,
+                    X=batch_x if needs_raw_x else None,
                 )
                 joint_missingness_loss = self.config.state_training.joint_missingness_weight * loss_components["total_loss"]
                 total_loss = state_loss + joint_missingness_loss
@@ -576,6 +621,8 @@ class SilenceAwareIDS(nn.Module):
                 epoch_health_reconstruction_loss += (
                     float(loss_components["health_reconstruction_loss"].item()) * weight
                 )
+                epoch_transition_loss += float(loss_components["transition_loss"].item()) * weight
+                epoch_health_transition_loss += float(loss_components["health_transition_loss"].item()) * weight
 
             num_rows = float(X.shape[0])
             state_history["loss"].append(epoch_total_loss / num_rows)
@@ -589,6 +636,8 @@ class SilenceAwareIDS(nn.Module):
             missingness_history["health_reconstruction_loss"].append(
                 epoch_health_reconstruction_loss / num_rows
             )
+            missingness_history["transition_loss"].append(epoch_transition_loss / num_rows)
+            missingness_history["health_transition_loss"].append(epoch_health_transition_loss / num_rows)
             LOGGER.info(
                 "Joint JVI epoch %d/%d - total %.6f state %.6f missingness %.6f",
                 epoch + 1,
@@ -738,11 +787,13 @@ class SilenceAwareIDS(nn.Module):
         """Produce state summaries adjusted by structural missingness risk.
 
         The baseline path uses plug-in GP summaries. When `M3` is configured
-        with `joint_variational`, the missingness module first refines those
-        summaries with an amortized latent encoder conditioned on observed
-        values, availability, and heterogeneous context. High predicted
-        missingness then inflates variance and shrinks the predictive mean
-        toward the GP prior mean.
+        with `joint_variational` or `joint_generative`, the missingness module
+        first refines those summaries with an amortized latent encoder
+        conditioned on observed values, availability, and heterogeneous
+        context. `joint_generative` further trains that latent path with a
+        sampled ELBO-style reconstruction objective. High predicted missingness
+        then inflates variance and shrinks the predictive mean toward the GP
+        prior mean.
 
         Args:
             X: Input coordinates with shape `[N, D]`.
@@ -985,8 +1036,366 @@ class SilenceAwareIDS(nn.Module):
             "dynamic_silence": flags,
             "sensor_state_probs": sensor_state_probs,
             "sensor_state_labels": sensor_state_labels,
+            "state_mean": z_mean,
+            "state_var": z_var,
             "available": observed_mask,
         }
+
+    def _temporal_fault_signal(
+        self,
+        X: Tensor,
+        y: Tensor,
+        silence_features: Mapping[str, Tensor],
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None,
+    ) -> Tensor:
+        """Estimate station-local temporal mismatch for drift, freeze, and burst faults."""
+        y = _coerce_tensor_1d(y, name="y")
+        if X.ndim != 2 or X.shape[1] <= 2:
+            return torch.zeros_like(silence_features["diagnostic_score"])
+
+        metadata = SensorMetadataBatch.from_input(sensor_metadata)
+        sensor_instance = metadata.sensor_instance
+        if sensor_instance is None:
+            return torch.zeros_like(silence_features["diagnostic_score"])
+
+        available = silence_features["available"].bool()
+        z_mean = silence_features.get("state_mean")
+        z_var = silence_features.get("state_var")
+        if z_mean is None or z_var is None:
+            return torch.zeros_like(silence_features["diagnostic_score"])
+
+        residual_ratio = silence_features["residuals"] / torch.clamp(
+            silence_features["threshold"],
+            min=self.config.observation.threshold_floor,
+        )
+        signal = torch.zeros_like(residual_ratio)
+        time_coordinate = X[:, 2]
+        variance_floor = max(self.config.observation.variance_floor, 1e-6)
+        smoothing = float(self.config.observation.temporal_smoothing)
+
+        unique_instances = torch.unique(sensor_instance[available])
+        for instance_id in unique_instances.tolist():
+            station_mask = available & (sensor_instance == int(instance_id))
+            station_index = station_mask.nonzero(as_tuple=False).squeeze(-1)
+            if station_index.numel() < 2:
+                continue
+            station_time = time_coordinate[station_index]
+            order = torch.argsort(station_time, stable=True)
+            ordered_index = station_index[order]
+
+            y_station = y[ordered_index]
+            mean_station = z_mean[ordered_index]
+            var_station = z_var[ordered_index]
+            ratio_station = residual_ratio[ordered_index]
+
+            delta_y = torch.abs(y_station[1:] - y_station[:-1])
+            delta_mean = torch.abs(mean_station[1:] - mean_station[:-1])
+            local_scale = (
+                torch.sqrt(torch.clamp(var_station[1:] + var_station[:-1], min=variance_floor))
+                + torch.clamp(silence_features["threshold"][ordered_index][1:], min=self.config.observation.threshold_floor)
+            )
+            transition_mismatch = torch.abs(delta_y - delta_mean) / local_scale
+            stasis_mismatch = torch.relu(delta_mean - delta_y) / local_scale
+
+            persistence = torch.zeros_like(ratio_station)
+            if ratio_station.numel() > 0:
+                persistence[0] = ratio_station[0]
+            for step in range(1, ratio_station.numel()):
+                persistence[step] = smoothing * persistence[step - 1] + (1.0 - smoothing) * ratio_station[step]
+
+            station_signal = torch.zeros_like(ratio_station)
+            station_signal[1:] = transition_mismatch + 0.5 * stasis_mismatch
+            station_signal = station_signal + self.config.observation.fault_score_persistence_weight * persistence
+            signal[ordered_index] = station_signal
+        return signal
+
+    def _fault_score_from_silence_features(
+        self,
+        X: Tensor,
+        y: Tensor,
+        silence_features: Mapping[str, Tensor],
+        context: Tensor | None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None,
+    ) -> Tensor:
+        """Fuse normalized residual, DBN-state, PI-SSD, and temporal signals into one fault score."""
+        state_probs = silence_features["sensor_state_probs"]
+        if state_probs.ndim == 2 and state_probs.shape[-1] > 0:
+            state_deviation = 1.0 - state_probs[:, 0]
+        else:
+            state_deviation = torch.zeros_like(silence_features["diagnostic_score"])
+        embedding = silence_features["diagnosis_embedding"]
+        if embedding.ndim == 2 and embedding.shape[-1] > 0:
+            embedding_norm = torch.norm(embedding, dim=-1)
+        else:
+            embedding_norm = torch.zeros_like(silence_features["diagnostic_score"])
+        temporal_signal = self._temporal_fault_signal(
+            X,
+            y,
+            silence_features,
+            sensor_metadata,
+        )
+        available = silence_features["available"].bool()
+        fault_probability = torch.zeros_like(silence_features["diagnostic_score"])
+        if available.any():
+            fault_probability[available] = self.observation_model.fault_probability(
+                y_true=y[available],
+                z_mean=silence_features["state_mean"][available],
+                z_var=silence_features["state_var"][available],
+                context=None if context is None else context[available],
+                sensor_metadata=_slice_metadata(
+                    sensor_metadata,
+                    available.nonzero(as_tuple=False).squeeze(-1),
+                ),
+            )
+        components = {
+            "diagnostic_score": silence_features["diagnostic_score"].clone(),
+            "state_deviation": state_deviation,
+            "embedding_norm": embedding_norm,
+            "temporal_signal": temporal_signal,
+            "fault_probability": fault_probability,
+        }
+        if self._fault_component_stats is not None:
+            normalized: dict[str, Tensor] = {}
+            for name, values in components.items():
+                mean, std = self._fault_component_stats.get(name, (0.0, 1.0))
+                normalized[name] = (values - float(mean)) / max(float(std), 1e-6)
+            components = normalized
+        score = components["diagnostic_score"]
+        score = score + self.config.observation.fault_score_state_weight * components["state_deviation"]
+        score = score + self.config.observation.fault_score_embedding_weight * components["embedding_norm"]
+        score = score + self.config.observation.fault_score_temporal_weight * components["temporal_signal"]
+        score = score + self.config.observation.fault_score_probability_weight * components["fault_probability"]
+        return score
+
+    def calibrate_fault_detection(
+        self,
+        X: Tensor,
+        y: Tensor,
+        *,
+        context: Tensor | None = None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
+        target_false_alarm_rate: float | None = None,
+        batch_size: int | None = None,
+    ) -> Tensor:
+        """Calibrate a fault-detection threshold on a clean calibration set."""
+        if not self.config.use_m2:
+            raise RuntimeError("M2 is disabled; fault calibration is unavailable.")
+        y = _coerce_tensor_1d(y, name="y")
+        target_far = (
+            self.config.observation.fault_target_false_alarm_rate
+            if target_false_alarm_rate is None
+            else float(target_false_alarm_rate)
+        )
+        silence_features = self.detect_silence(
+            X,
+            y,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            batch_size=batch_size,
+        )
+        available = silence_features["available"]
+        if not torch.any(available):
+            raise ValueError("calibrate_fault_detection requires at least one observed target.")
+        state_probs = silence_features["sensor_state_probs"]
+        state_deviation = (
+            1.0 - state_probs[:, 0]
+            if state_probs.ndim == 2 and state_probs.shape[-1] > 0
+            else torch.zeros_like(silence_features["diagnostic_score"])
+        )
+        embedding = silence_features["diagnosis_embedding"]
+        embedding_norm = (
+            torch.norm(embedding, dim=-1)
+            if embedding.ndim == 2 and embedding.shape[-1] > 0
+            else torch.zeros_like(silence_features["diagnostic_score"])
+        )
+        temporal_signal = self._temporal_fault_signal(
+            X,
+            y,
+            silence_features,
+            sensor_metadata,
+        )
+        fault_probability = torch.zeros_like(silence_features["diagnostic_score"])
+        available_mask = available.bool()
+        if available_mask.any():
+            fault_probability[available_mask] = self.observation_model.fault_probability(
+                y_true=y[available_mask],
+                z_mean=silence_features["state_mean"][available_mask],
+                z_var=silence_features["state_var"][available_mask],
+                context=None if context is None else context[available_mask],
+                sensor_metadata=_slice_metadata(
+                    sensor_metadata,
+                    available_mask.nonzero(as_tuple=False).squeeze(-1),
+                ),
+            )
+        component_map = {
+            "diagnostic_score": silence_features["diagnostic_score"],
+            "state_deviation": state_deviation,
+            "embedding_norm": embedding_norm,
+            "temporal_signal": temporal_signal,
+            "fault_probability": fault_probability,
+        }
+        self._fault_component_stats = {}
+        for name, values in component_map.items():
+            observed_values = values[available]
+            mean = float(observed_values.mean().item())
+            std = float(torch.clamp(observed_values.std(unbiased=False), min=1e-6).item())
+            self._fault_component_stats[name] = (mean, std)
+        fault_score = self._fault_score_from_silence_features(
+            X,
+            y,
+            silence_features,
+            context,
+            sensor_metadata,
+        )
+        threshold = torch.quantile(
+            fault_score[available],
+            q=min(max(1.0 - target_far, 0.0), 1.0),
+        )
+        self._fault_detection_threshold = float(threshold.item())
+        return threshold
+
+    def tune_fault_threshold(
+        self,
+        fault_score: Tensor,
+        fault_label: Tensor,
+        *,
+        search_quantiles: int = 21,
+        target_false_alarm_rate: float | None = None,
+        far_penalty_weight: float = 0.5,
+    ) -> Tensor:
+        """Tune a fault threshold against labeled calibration faults.
+
+        The search remains F1-driven, but it also penalizes thresholds that
+        exceed the desired false-alarm budget so diagnosis variants do not win
+        calibration solely by over-flagging.
+        """
+        score = _coerce_tensor_1d(fault_score, name="fault_score")
+        labels = _coerce_tensor_1d(fault_label.float(), name="fault_label")
+        valid = torch.isfinite(score) & torch.isfinite(labels)
+        if not valid.any():
+            raise ValueError("tune_fault_threshold requires finite labeled scores.")
+        score = score[valid]
+        labels = labels[valid] > 0.5
+        if score.numel() == 0:
+            raise ValueError("tune_fault_threshold requires at least one valid score.")
+        target_far = (
+            self.config.observation.fault_target_false_alarm_rate
+            if target_false_alarm_rate is None
+            else float(target_false_alarm_rate)
+        )
+
+        candidate_thresholds = torch.quantile(
+            score,
+            torch.linspace(0.5, 0.995, search_quantiles, device=score.device, dtype=score.dtype),
+        )
+        candidate_thresholds = torch.unique(candidate_thresholds)
+        best_threshold = candidate_thresholds[0]
+        best_f1 = -1.0
+        best_far = float("inf")
+        best_precision = -1.0
+        best_objective = float("-inf")
+        negative = ~labels
+        for threshold in candidate_thresholds:
+            flags = score > threshold
+            tp = float((flags & labels).float().sum().item())
+            fp = float((flags & negative).float().sum().item())
+            fn = float((~flags & labels).float().sum().item())
+            precision = tp / max(tp + fp, 1.0)
+            recall = tp / max(tp + fn, 1.0)
+            f1 = 2.0 * precision * recall / max(precision + recall, 1e-6)
+            far = float((flags & negative).float().sum().item()) / max(float(negative.float().sum().item()), 1.0)
+            far_penalty = max(far - target_far, 0.0)
+            objective = f1 - far_penalty_weight * far_penalty
+            if (
+                objective > best_objective
+                or (math.isclose(objective, best_objective) and f1 > best_f1)
+                or (
+                    math.isclose(objective, best_objective)
+                    and math.isclose(f1, best_f1)
+                    and precision > best_precision
+                )
+                or (
+                    math.isclose(objective, best_objective)
+                    and math.isclose(f1, best_f1)
+                    and math.isclose(precision, best_precision)
+                    and far < best_far
+                )
+            ):
+                best_objective = objective
+                best_f1 = f1
+                best_far = far
+                best_precision = precision
+                best_threshold = threshold
+        self._fault_detection_threshold = float(best_threshold.item())
+        return best_threshold
+
+    def detect_faults(
+        self,
+        X: Tensor,
+        y: Tensor,
+        *,
+        context: Tensor | None = None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
+        fault_threshold: float | Tensor | None = None,
+        target_false_alarm_rate: float | None = None,
+        batch_size: int | None = None,
+    ) -> dict[str, Tensor]:
+        """Detect sensor faults using a calibrated score built on M2 diagnostics."""
+        y = _coerce_tensor_1d(y, name="y")
+        silence_features = self.detect_silence(
+            X,
+            y,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            batch_size=batch_size,
+        )
+        fault_score = self._fault_score_from_silence_features(
+            X,
+            y,
+            silence_features,
+            context,
+            sensor_metadata,
+        )
+        if fault_threshold is None:
+            if self._fault_detection_threshold is None:
+                threshold_value = 1.0 + self.config.observation.fault_score_state_weight
+            else:
+                threshold_value = self._fault_detection_threshold
+        elif isinstance(fault_threshold, Tensor):
+            threshold_value = float(fault_threshold.item())
+        else:
+            threshold_value = float(fault_threshold)
+        if target_false_alarm_rate is not None:
+            threshold_value = float(
+                self.calibrate_fault_detection(
+                    X,
+                    y,
+                    context=context,
+                    sensor_metadata=sensor_metadata,
+                    target_false_alarm_rate=target_false_alarm_rate,
+                    batch_size=batch_size,
+                ).item()
+            )
+        fault_flag = silence_features["available"] & (fault_score > threshold_value)
+        output = dict(silence_features)
+        available_mask = silence_features["available"].bool()
+        fault_probability = torch.zeros_like(fault_score)
+        if available_mask.any():
+            fault_probability[available_mask] = self.observation_model.fault_probability(
+                y_true=y[available_mask],
+                z_mean=silence_features["state_mean"][available_mask],
+                z_var=silence_features["state_var"][available_mask],
+                context=None if context is None else context[available_mask],
+                sensor_metadata=_slice_metadata(
+                    sensor_metadata,
+                    available_mask.nonzero(as_tuple=False).squeeze(-1),
+                ),
+            )
+        output["fault_score"] = fault_score
+        output["fault_probability"] = fault_probability
+        output["fault_threshold"] = torch.full_like(fault_score, threshold_value)
+        output["fault_flag"] = fault_flag
+        return output
 
     def fit_missingness_model(
         self,
@@ -1052,10 +1461,12 @@ class SilenceAwareIDS(nn.Module):
         )
         self.missingness_model.train()
         history = {"loss": []}
-        if self.missingness_model.config.inference_strategy == "joint_variational":
+        if self.missingness_model.config.inference_strategy != "plug_in":
             history["missingness_loss"] = []
             history["reconstruction_loss"] = []
             history["kl_loss"] = []
+            history["transition_loss"] = []
+            history["health_transition_loss"] = []
             if self.missingness_model.config.use_sensor_health_latent:
                 history["health_kl_loss"] = []
                 history["health_reconstruction_loss"] = []
@@ -1067,10 +1478,19 @@ class SilenceAwareIDS(nn.Module):
             epoch_kl_loss = 0.0
             epoch_health_kl_loss = 0.0
             epoch_health_reconstruction_loss = 0.0
+            epoch_transition_loss = 0.0
+            epoch_health_transition_loss = 0.0
             batches = self._iterate_batches(X.shape[0], active_batch_size, device=X.device)
             for batch_index in batches:
                 optimizer.zero_grad(set_to_none=True)
                 batch_metadata = _slice_metadata(sensor_metadata, batch_index)
+                needs_raw_x = (
+                    self.missingness_model.config.include_x
+                    or (
+                        self.missingness_model.config.inference_strategy == "joint_generative"
+                        and self.missingness_model.config.use_temporal_transition_prior
+                    )
+                )
                 loss_components = self.missingness_model.compute_loss_components(
                     target_missing=missing_indicator[batch_index],
                     z_mean=z_mean[batch_index].detach(),
@@ -1083,7 +1503,7 @@ class SilenceAwareIDS(nn.Module):
                     dynamic_residual=_slice_optional(effective_residual, batch_index),
                     dynamic_threshold=_slice_optional(effective_threshold, batch_index),
                     dynamic_feature_available=_slice_optional(effective_available, batch_index),
-                    X=X[batch_index] if self.missingness_model.config.include_x else None,
+                    X=X[batch_index] if needs_raw_x else None,
                 )
                 loss = loss_components["total_loss"]
                 loss.backward()
@@ -1101,12 +1521,18 @@ class SilenceAwareIDS(nn.Module):
                 epoch_health_reconstruction_loss += (
                     float(loss_components["health_reconstruction_loss"].item()) * batch_index.numel()
                 )
+                epoch_transition_loss += float(loss_components["transition_loss"].item()) * batch_index.numel()
+                epoch_health_transition_loss += (
+                    float(loss_components["health_transition_loss"].item()) * batch_index.numel()
+                )
             mean_epoch_loss = epoch_loss / float(X.shape[0])
             history["loss"].append(mean_epoch_loss)
-            if self.missingness_model.config.inference_strategy == "joint_variational":
+            if self.missingness_model.config.inference_strategy != "plug_in":
                 history["missingness_loss"].append(epoch_missingness_loss / float(X.shape[0]))
                 history["reconstruction_loss"].append(epoch_reconstruction_loss / float(X.shape[0]))
                 history["kl_loss"].append(epoch_kl_loss / float(X.shape[0]))
+                history["transition_loss"].append(epoch_transition_loss / float(X.shape[0]))
+                history["health_transition_loss"].append(epoch_health_transition_loss / float(X.shape[0]))
                 if self.missingness_model.config.use_sensor_health_latent:
                     history["health_kl_loss"].append(epoch_health_kl_loss / float(X.shape[0]))
                     history["health_reconstruction_loss"].append(
@@ -1348,12 +1774,13 @@ class SilenceAwareIDS(nn.Module):
         Returns:
             Structured training summary including calibration artifacts.
         """
+        joint_training_strategies = {"joint_variational", "joint_generative"}
         joint_jvi_training = (
-            self.config.state_training.training_strategy == "joint_variational"
+            self.config.state_training.training_strategy in joint_training_strategies
             and self.use_m3
             and self.missingness_model is not None
             and missing_indicator_train is not None
-            and self.missingness_model.config.inference_strategy == "joint_variational"
+            and self.missingness_model.config.inference_strategy == self.config.state_training.training_strategy
         )
         missingness_history: dict[str, list[float]] | None = None
         if joint_jvi_training:
@@ -1581,6 +2008,7 @@ class SilenceAwareIDS(nn.Module):
         integrate_missingness: bool = True,
         logit_scale: float = 1.0,
         batch_size: int | None = None,
+        progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> dict[str, float]:
         """Evaluate accuracy, proper scores, and calibrated interval quality.
 
@@ -1593,6 +2021,8 @@ class SilenceAwareIDS(nn.Module):
             sensor_metadata: Optional heterogeneous sensor metadata.
             integrate_missingness: Whether to inflate predictive uncertainty using M3.
             logit_scale: Optional MNAR-strength multiplier.
+            progress_callback: Optional heartbeat callback receiving stage names and
+                lightweight metadata for detached progress tracing.
 
         Returns:
             Flat metric dictionary for experiment reporting.
@@ -1600,89 +2030,139 @@ class SilenceAwareIDS(nn.Module):
         scorer = self.reliability_model or ConformalPredictor(self.config.reliability)
         X = _coerce_tensor_2d(X, name="X")
         y = _coerce_tensor_1d(y, name="y")
+        _emit_progress_event(
+            progress_callback,
+            "start",
+            input_rows=int(X.shape[0]),
+            batch_size=None if batch_size is None else int(batch_size),
+            integrate_missingness=bool(integrate_missingness and self.use_m3),
+            reliability_mode=self.config.reliability.mode if self.use_m5 else "disabled",
+        )
         observed_mask = torch.isfinite(y)
         if not observed_mask.any():
             raise ValueError("evaluate_predictions requires at least one observed target.")
+        observed_index = observed_mask.nonzero(as_tuple=False).squeeze(-1)
+        X_eval = X[observed_index]
+        y_eval = y[observed_index]
+        context_eval = _slice_optional(context, observed_index)
+        M_eval = _slice_optional(M, observed_index)
+        S_eval = _slice_optional(S, observed_index)
+        sensor_metadata_eval = _slice_metadata(sensor_metadata, observed_index)
+        _emit_progress_event(
+            progress_callback,
+            "observed_subset_ready",
+            observed_rows=int(X_eval.shape[0]),
+        )
 
+        _emit_progress_event(progress_callback, "predictive_summary_start")
         if integrate_missingness and self.use_m3:
             mu, var, p_miss = self.missingness_aware_state_summary(
-                X,
-                y=y,
-                context=context,
-                M=M,
-                S=S,
-                sensor_metadata=sensor_metadata,
+                X_eval,
+                y=y_eval,
+                context=context_eval,
+                M=M_eval,
+                S=S_eval,
+                sensor_metadata=sensor_metadata_eval,
                 batch_size=batch_size,
                 logit_scale=logit_scale,
                 include_observation_noise=self.config.reliability.prediction_target == "observation",
             )
         else:
             mu, var = self.predict_state(
-                X,
+                X_eval,
                 batch_size=batch_size,
                 include_observation_noise=self.config.reliability.prediction_target == "observation",
             )
             p_miss = None
+        _emit_progress_event(
+            progress_callback,
+            "predictive_summary_complete",
+            mean_variance=float(torch.clamp(var, min=1e-6).mean().item()),
+            mean_missingness=None if p_miss is None else float(p_miss.mean().item()),
+        )
         silence_features: dict[str, Tensor] | None = None
         if self.config.use_m2 and (
-            S is None or (self.use_m5 and self.config.reliability.mode in {"relational_adaptive", "graph_corel"})
+            S_eval is None or (self.use_m5 and self.config.reliability.mode in {"relational_adaptive", "graph_corel"})
         ):
+            _emit_progress_event(progress_callback, "silence_detection_start")
             silence_features = self.detect_silence(
-                X,
-                y,
-                context=context,
-                sensor_metadata=sensor_metadata,
+                X_eval,
+                y_eval,
+                context=context_eval,
+                sensor_metadata=sensor_metadata_eval,
                 batch_size=batch_size,
             )
-            if S is None:
-                S = silence_features["dynamic_silence"].float()
+            if S_eval is None:
+                S_eval = silence_features["dynamic_silence"].float()
+            _emit_progress_event(
+                progress_callback,
+                "silence_detection_complete",
+                flagged=int(silence_features["dynamic_silence"].sum().item()),
+            )
         lower: Tensor | None = None
         upper: Tensor | None = None
         interval_metadata: dict[str, float] | None = None
         if self.use_m5 and self.reliability_model is not None and self.reliability_model.is_calibrated:
             if self.config.reliability.mode == "adaptive":
+                _emit_progress_event(progress_callback, "intervals_start", mode="adaptive")
                 self.reliability_model.reset_adaptation()
-                lower_obs, upper_obs, interval_metadata = self.reliability_model.predict_interval_adaptive(
-                    mu_test=mu[observed_mask],
-                    var_test=var[observed_mask],
-                    y_true=y[observed_mask],
+                lower, upper, interval_metadata = self.reliability_model.predict_interval_adaptive(
+                    mu_test=mu,
+                    var_test=var,
+                    y_true=y_eval,
                 )
-                lower = torch.zeros_like(mu)
-                upper = torch.zeros_like(mu)
-                lower[observed_mask] = lower_obs
-                upper[observed_mask] = upper_obs
             elif self.config.reliability.mode in {"relational_adaptive", "graph_corel"}:
+                _emit_progress_event(progress_callback, "relational_features_start", mode=self.config.reliability.mode)
                 self.reliability_model.reset_adaptation()
                 node_features = self._relational_node_features(
-                    X,
-                    y=y,
-                    context=context,
-                    sensor_metadata=sensor_metadata,
+                    X_eval,
+                    y=y_eval,
+                    context=context_eval,
+                    sensor_metadata=sensor_metadata_eval,
                     silence_features=silence_features,
                     batch_size=batch_size,
                 )
-                lower_obs, upper_obs, interval_metadata = self.reliability_model.predict_interval_adaptive(
-                    mu_test=mu[observed_mask],
-                    var_test=var[observed_mask],
-                    y_true=y[observed_mask],
-                    node_features=node_features[observed_mask],
+                _emit_progress_event(
+                    progress_callback,
+                    "relational_features_complete",
+                    feature_dim=int(node_features.shape[-1]),
                 )
-                lower = torch.zeros_like(mu)
-                upper = torch.zeros_like(mu)
-                lower[observed_mask] = lower_obs
-                upper[observed_mask] = upper_obs
+                _emit_progress_event(progress_callback, "intervals_start", mode=self.config.reliability.mode)
+                lower, upper, interval_metadata = self.reliability_model.predict_interval_adaptive(
+                    mu_test=mu,
+                    var_test=var,
+                    y_true=y_eval,
+                    node_features=node_features,
+                )
             else:
+                _emit_progress_event(progress_callback, "intervals_start", mode="split")
                 lower, upper, interval_metadata = self.reliability_model.predict_interval(
                     mu_test=mu,
                     var_test=var,
                 )
+            _emit_progress_event(
+                progress_callback,
+                "intervals_complete",
+                covered_rows=0 if lower is None else int(lower.shape[0]),
+                interval_width=None
+                if lower is None or upper is None
+                else float((upper - lower).mean().item()),
+            )
 
+        _emit_progress_event(progress_callback, "metrics_start")
         metrics = scorer.evaluate_gaussian_predictions(
-            mu=mu[observed_mask],
-            var=var[observed_mask],
-            y_true=y[observed_mask],
-            lower=None if lower is None else lower[observed_mask],
-            upper=None if upper is None else upper[observed_mask],
+            mu=mu,
+            var=var,
+            y_true=y_eval,
+            lower=lower,
+            upper=upper,
+        )
+        _emit_progress_event(
+            progress_callback,
+            "metrics_complete",
+            rmse=float(metrics.rmse),
+            crps=float(metrics.crps),
+            coverage=None if metrics.coverage is None else float(metrics.coverage),
         )
         output = {
             "rmse": metrics.rmse,
@@ -1695,13 +2175,14 @@ class SilenceAwareIDS(nn.Module):
         if metrics.interval_width is not None:
             output["interval_width"] = metrics.interval_width
         if p_miss is not None:
-            output["mean_missingness_proba"] = float(p_miss[observed_mask].mean().item())
+            output["mean_missingness_proba"] = float(p_miss.mean().item())
         if interval_metadata is not None and "final_epsilon" in interval_metadata:
             output["final_adaptive_epsilon"] = float(interval_metadata["final_epsilon"])
         if interval_metadata is not None and "mean_neighbor_error" in interval_metadata:
             output["mean_neighbor_error"] = float(interval_metadata["mean_neighbor_error"])
         if interval_metadata is not None and "mean_graph_quantile" in interval_metadata:
             output["mean_graph_quantile"] = float(interval_metadata["mean_graph_quantile"])
+        _emit_progress_event(progress_callback, "completed", metric_keys=sorted(output.keys()))
         return output
 
     def infer_sensor_health(
@@ -1835,8 +2316,10 @@ class SilenceAwareIDS(nn.Module):
         base = replace(self.config)
         plugin_missingness = replace(base.missingness, inference_strategy="plug_in")
         joint_missingness = replace(base.missingness, inference_strategy="joint_variational")
+        generative_missingness = replace(base.missingness, inference_strategy="joint_generative")
         sequential_state = replace(base.state_training, training_strategy="sequential")
         joint_state = replace(base.state_training, training_strategy="joint_variational")
+        generative_state = replace(base.state_training, training_strategy="joint_generative")
         adaptive_reliability = replace(base.reliability, mode="adaptive")
         relational_reliability = replace(base.reliability, mode="relational_adaptive")
         graph_reliability = replace(base.reliability, mode="graph_corel")
@@ -1909,6 +2392,28 @@ class SilenceAwareIDS(nn.Module):
                 policy=myopic_policy,
                 state_training=joint_state,
             ),
+            "gp_plus_joint_generative_missingness": replace(
+                base,
+                use_m2=True,
+                use_m3=True,
+                use_m5=False,
+                homogeneous_missingness=False,
+                sensor_conditional_missingness=True,
+                missingness=replace(generative_missingness, mode="selection"),
+                policy=myopic_policy,
+                state_training=sequential_state,
+            ),
+            "gp_plus_joint_generative_jvi_training": replace(
+                base,
+                use_m2=True,
+                use_m3=True,
+                use_m5=False,
+                homogeneous_missingness=False,
+                sensor_conditional_missingness=True,
+                missingness=replace(generative_missingness, mode="selection"),
+                policy=myopic_policy,
+                state_training=generative_state,
+            ),
             "gp_plus_conformal_reliability": replace(
                 base,
                 use_m2=True,
@@ -1938,9 +2443,9 @@ class SilenceAwareIDS(nn.Module):
                 use_m5=True,
                 homogeneous_missingness=False,
                 sensor_conditional_missingness=True,
-                missingness=replace(joint_missingness, mode="selection"),
+                missingness=replace(generative_missingness, mode="selection"),
                 policy=ppo_warm_policy,
-                state_training=joint_state,
+                state_training=generative_state,
                 reliability=graph_reliability,
             ),
             "full_model": replace(
@@ -1950,9 +2455,9 @@ class SilenceAwareIDS(nn.Module):
                 use_m5=True,
                 homogeneous_missingness=False,
                 sensor_conditional_missingness=True,
-                missingness=replace(joint_missingness, mode="selection"),
+                missingness=replace(generative_missingness, mode="selection"),
                 policy=ppo_online_policy,
-                state_training=joint_state,
+                state_training=generative_state,
                 reliability=graph_reliability,
             ),
             "gp_plus_pattern_mixture_missingness": replace(
@@ -1973,9 +2478,9 @@ class SilenceAwareIDS(nn.Module):
                 use_m5=True,
                 homogeneous_missingness=False,
                 sensor_conditional_missingness=True,
-                missingness=replace(joint_missingness, mode="selection"),
+                missingness=replace(generative_missingness, mode="selection"),
                 policy=myopic_policy,
-                state_training=joint_state,
+                state_training=generative_state,
                 reliability=graph_reliability,
             ),
             "rollout_policy_baseline": replace(
@@ -1985,9 +2490,9 @@ class SilenceAwareIDS(nn.Module):
                 use_m5=True,
                 homogeneous_missingness=False,
                 sensor_conditional_missingness=True,
-                missingness=replace(joint_missingness, mode="selection"),
+                missingness=replace(generative_missingness, mode="selection"),
                 policy=rollout_policy,
-                state_training=joint_state,
+                state_training=generative_state,
                 reliability=graph_reliability,
             ),
             "variance_policy_baseline": replace(
@@ -1997,9 +2502,9 @@ class SilenceAwareIDS(nn.Module):
                 use_m5=True,
                 homogeneous_missingness=False,
                 sensor_conditional_missingness=True,
-                missingness=replace(joint_missingness, mode="selection"),
+                missingness=replace(generative_missingness, mode="selection"),
                 policy=replace(myopic_policy, utility_surrogate="variance"),
-                state_training=joint_state,
+                state_training=generative_state,
                 reliability=graph_reliability,
             ),
         }
@@ -2208,6 +2713,8 @@ class SilenceAwareIDS(nn.Module):
             "observation_var": observation_var,
             "observation_target": "observation",
             "dynamic_silence": None,
+            "fault_score": None,
+            "fault_flag": None,
             "diagnosis_embedding": None,
             "sensor_state_probs": None,
             "sensor_state_labels": None,
@@ -2231,6 +2738,15 @@ class SilenceAwareIDS(nn.Module):
             output["diagnosis_embedding"] = silence_features["diagnosis_embedding"]
             output["sensor_state_probs"] = silence_features["sensor_state_probs"]
             output["sensor_state_labels"] = silence_features["sensor_state_labels"]
+            fault_features = self.detect_faults(
+                X,
+                y,
+                context=context,
+                sensor_metadata=sensor_metadata,
+                batch_size=batch_size,
+            )
+            output["fault_score"] = fault_features["fault_score"]
+            output["fault_flag"] = fault_features["fault_flag"]
             if S is None:
                 S = silence_features["dynamic_silence"].float()
 
@@ -2342,6 +2858,26 @@ class SilenceAwareIDS(nn.Module):
             and self.config.state_training.training_strategy == "joint_variational"
             and self.config.policy.utility_surrogate != "variance"
         )
+        gp_plus_joint_generative_missingness = (
+            self.config.use_m2
+            and self.use_m3
+            and (not self.use_m5)
+            and self.config.sensor_conditional_missingness
+            and self.config.missingness.mode == "selection"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "sequential"
+            and self.config.policy.utility_surrogate != "variance"
+        )
+        gp_plus_joint_generative_jvi_training = (
+            self.config.use_m2
+            and self.use_m3
+            and (not self.use_m5)
+            and self.config.sensor_conditional_missingness
+            and self.config.missingness.mode == "selection"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
+            and self.config.policy.utility_surrogate != "variance"
+        )
         gp_plus_pattern_mixture_missingness = (
             self.config.use_m2
             and self.use_m3
@@ -2369,8 +2905,8 @@ class SilenceAwareIDS(nn.Module):
             and self.use_m5
             and self.config.sensor_conditional_missingness
             and self.config.missingness.mode == "selection"
-            and self.config.missingness.inference_strategy == "joint_variational"
-            and self.config.state_training.training_strategy == "joint_variational"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
             and self.config.policy.utility_surrogate != "variance"
             and self.config.policy.planning_strategy == "lazy_greedy"
         )
@@ -2380,8 +2916,8 @@ class SilenceAwareIDS(nn.Module):
             and self.use_m5
             and self.config.sensor_conditional_missingness
             and self.config.missingness.mode == "selection"
-            and self.config.missingness.inference_strategy == "joint_variational"
-            and self.config.state_training.training_strategy == "joint_variational"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
             and self.config.policy.utility_surrogate != "variance"
             and self.config.policy.planning_strategy == "ppo_warmstart"
         )
@@ -2391,8 +2927,8 @@ class SilenceAwareIDS(nn.Module):
             and self.use_m5
             and self.config.sensor_conditional_missingness
             and self.config.missingness.mode == "selection"
-            and self.config.missingness.inference_strategy == "joint_variational"
-            and self.config.state_training.training_strategy == "joint_variational"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
             and self.config.policy.utility_surrogate != "variance"
             and self.config.policy.planning_strategy == "non_myopic_rollout"
         )
@@ -2402,8 +2938,8 @@ class SilenceAwareIDS(nn.Module):
             and self.use_m5
             and self.config.sensor_conditional_missingness
             and self.config.missingness.mode == "selection"
-            and self.config.missingness.inference_strategy == "joint_variational"
-            and self.config.state_training.training_strategy == "joint_variational"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
             and self.config.policy.utility_surrogate == "variance"
             and self.config.policy.planning_strategy == "lazy_greedy"
         )
@@ -2413,8 +2949,8 @@ class SilenceAwareIDS(nn.Module):
             and self.use_m5
             and self.config.sensor_conditional_missingness
             and self.config.missingness.mode == "selection"
-            and self.config.missingness.inference_strategy == "joint_variational"
-            and self.config.state_training.training_strategy == "joint_variational"
+            and self.config.missingness.inference_strategy == "joint_generative"
+            and self.config.state_training.training_strategy == "joint_generative"
             and self.config.policy.utility_surrogate != "variance"
             and self.config.policy.planning_strategy == "ppo_online"
         )
@@ -2444,15 +2980,34 @@ class SilenceAwareIDS(nn.Module):
                 )
             ),
             "missingness_integration": (
-                "joint_elbo_sparse_gp_with_latent_adapter"
+                "joint_elbo_sparse_gp_with_temporal_transition_prior"
                 if (
-                    self.config.missingness.inference_strategy == "joint_variational"
-                    and self.config.state_training.training_strategy == "joint_variational"
+                    self.config.missingness.inference_strategy == "joint_generative"
+                    and self.config.state_training.training_strategy == "joint_generative"
+                    and self.config.missingness.use_temporal_transition_prior
                 )
                 else (
-                    "joint_variational_latent_adapter"
-                    if self.config.missingness.inference_strategy == "joint_variational"
-                    else "plug_in_latent_summary"
+                    "joint_elbo_sparse_gp_with_generative_decoder"
+                    if (
+                        self.config.missingness.inference_strategy == "joint_generative"
+                        and self.config.state_training.training_strategy == "joint_generative"
+                    )
+                    else (
+                        "joint_generative_decoder"
+                        if self.config.missingness.inference_strategy == "joint_generative"
+                        else (
+                            "joint_elbo_sparse_gp_with_latent_adapter"
+                            if (
+                                self.config.missingness.inference_strategy == "joint_variational"
+                                and self.config.state_training.training_strategy == "joint_variational"
+                            )
+                            else (
+                                "joint_variational_latent_adapter"
+                                if self.config.missingness.inference_strategy == "joint_variational"
+                                else "plug_in_latent_summary"
+                            )
+                        )
+                    )
                 )
             ),
             "diagnosis_representation": "pi_ssd_embedding" if self.config.observation.use_pi_ssd else "threshold_only",
@@ -2465,6 +3020,9 @@ class SilenceAwareIDS(nn.Module):
             ),
             "observation_uncertainty_for_silence": self.config.observation.use_observation_noise,
             "missingness_sensor_health_latent": self.config.missingness.use_sensor_health_latent,
+            "missingness_temporal_transition_prior": self.config.missingness.use_temporal_transition_prior,
+            "missingness_transition_group_key": self.config.missingness.transition_group_key,
+            "missingness_transition_time_index": self.config.missingness.transition_time_index,
             "reliability_prediction_target": self.config.reliability.prediction_target,
             "reliability_mode": self.config.reliability.mode,
             "reliability_relational": self.config.reliability.mode == "relational_adaptive",
@@ -2482,6 +3040,8 @@ class SilenceAwareIDS(nn.Module):
                 "gp_plus_sensor_conditional_missingness": gp_plus_sensor_conditional_missingness,
                 "gp_plus_joint_variational_missingness": gp_plus_joint_variational_missingness,
                 "gp_plus_joint_jvi_training": gp_plus_joint_jvi_training,
+                "gp_plus_joint_generative_missingness": gp_plus_joint_generative_missingness,
+                "gp_plus_joint_generative_jvi_training": gp_plus_joint_generative_jvi_training,
                 "gp_plus_pattern_mixture_missingness": gp_plus_pattern_mixture_missingness,
                 "pattern_mixture_missingness": self.use_m3 and self.config.missingness.mode == "pattern_mixture",
                 "gp_plus_conformal_reliability": gp_plus_conformal_reliability,

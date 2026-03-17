@@ -1,10 +1,14 @@
 import io
 import importlib.util
+import io
 import json
+import sys
 import tempfile
+import types
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from task_cli.app import main
 
@@ -123,14 +127,20 @@ class ResearchCliTests(unittest.TestCase):
         self.assertIn("gp_plus_dynamic_silence", payload["run"]["variant_names"])
         self.assertIn("gp_plus_joint_variational_missingness", payload["run"]["variant_names"])
         self.assertIn("gp_plus_joint_jvi_training", payload["run"]["variant_names"])
+        self.assertIn("gp_plus_joint_generative_missingness", payload["run"]["variant_names"])
+        self.assertIn("gp_plus_joint_generative_jvi_training", payload["run"]["variant_names"])
         self.assertIn("gp_plus_pattern_mixture_missingness", payload["run"]["variant_names"])
         self.assertIn("gp_plus_conformal_reliability", payload["run"]["variant_names"])
         self.assertIn("relational_reliability_baseline", payload["run"]["variant_names"])
         self.assertIn("myopic_policy_baseline", payload["run"]["variant_names"])
         self.assertIn("ppo_warmstart_baseline", payload["run"]["variant_names"])
         self.assertIn("rollout_policy_baseline", payload["run"]["variant_names"])
-        self.assertEqual(payload["pipeline"]["missingness"]["inference_strategy"], "joint_variational")
-        self.assertEqual(payload["pipeline"]["state_training"]["training_strategy"], "joint_variational")
+        self.assertEqual(payload["pipeline"]["missingness"]["inference_strategy"], "joint_generative")
+        self.assertEqual(payload["pipeline"]["missingness"]["generative_samples"], 4)
+        self.assertTrue(payload["pipeline"]["missingness"]["use_temporal_transition_prior"])
+        self.assertEqual(payload["pipeline"]["missingness"]["transition_time_index"], 2)
+        self.assertEqual(payload["pipeline"]["missingness"]["transition_group_key"], "sensor_instance")
+        self.assertEqual(payload["pipeline"]["state_training"]["training_strategy"], "joint_generative")
         self.assertEqual(payload["pipeline"]["policy"]["planning_strategy"], "ppo_online")
         self.assertTrue(payload["pipeline"]["observation"]["use_pi_ssd"])
         self.assertTrue(payload["pipeline"]["observation"]["use_dbn"])
@@ -223,6 +233,131 @@ class ResearchCliTests(unittest.TestCase):
         self.assertIn("gp_plus_sensor_conditional_missingness", report_text)
         self.assertIn("Ablations:", output.getvalue())
         self.assertIn("Report:", output.getvalue())
+
+    def test_framework_run_detached_reports_launch_metadata(self) -> None:
+        framework_config = self.root / "framework_config.json"
+        self.assertEqual(
+            main(["framework-init", "--config", str(framework_config), "--data", str(self.data_path)]),
+            0,
+        )
+        output = io.StringIO()
+        launch_payload = {
+            "pid": 4321,
+            "output_path": str(self.root / "outputs" / "framework_run" / "summary.json"),
+            "stdout_path": str(self.root / "outputs" / "framework_run" / "framework_detached_stdout.log"),
+            "stderr_path": str(self.root / "outputs" / "framework_run" / "framework_detached_stderr.log"),
+        }
+        with mock.patch("task_cli.framework.launch_framework_detached", return_value=launch_payload):
+            with redirect_stdout(output):
+                code = main(["framework-run-detached", "--config", str(framework_config)])
+        self.assertEqual(code, 0)
+        self.assertIn("Framework detached run launched.", output.getvalue())
+        self.assertIn("PID: 4321", output.getvalue())
+
+    def test_framework_run_status_reads_progress_summary(self) -> None:
+        framework_config = self.root / "framework_config.json"
+        self.assertEqual(
+            main(["framework-init", "--config", str(framework_config), "--data", str(self.data_path)]),
+            0,
+        )
+        output = io.StringIO()
+        status_payload = {
+            "output_path": str(self.root / "outputs" / "framework_run" / "summary.json"),
+            "progress_path": str(self.root / "outputs" / "framework_run" / "framework_progress.json"),
+            "checkpoint_path": str(self.root / "outputs" / "framework_run" / "framework_run_checkpoint.pt"),
+            "heartbeat_path": str(self.root / "outputs" / "framework_run" / "framework_heartbeat.jsonl"),
+            "progress": {
+                "status": "running",
+                "stage": "evaluating_base_pipeline",
+                "updated_at": "2026-03-17T00:10:00",
+                "error": None,
+            },
+            "last_heartbeat": {
+                "timestamp": "2026-03-17T00:10:05",
+                "stage": "evaluating_base_pipeline",
+                "step": "predictive_summary_complete",
+                "payload": {"mean_variance": 1.0},
+            },
+            "launch": {
+                "pid": 4321,
+                "stdout_path": str(self.root / "outputs" / "framework_run" / "framework_detached_stdout.log"),
+                "stderr_path": str(self.root / "outputs" / "framework_run" / "framework_detached_stderr.log"),
+            },
+        }
+        with mock.patch("task_cli.framework.framework_run_status", return_value=status_payload):
+            with redirect_stdout(output):
+                code = main(["framework-run-status", "--config", str(framework_config)])
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("Status: running", text)
+        self.assertIn("Stage: evaluating_base_pipeline", text)
+        self.assertIn("Heartbeat: ", text)
+        self.assertIn("Heartbeat step: predictive_summary_complete", text)
+        self.assertIn("Last detached PID: 4321", text)
+
+    def test_benchmark_run_detached_reports_launch_metadata(self) -> None:
+        output = io.StringIO()
+        launch_payload = {
+            "pid": 8765,
+            "output_dir": str(self.root / "outputs" / "benchmark_suite"),
+            "stdout_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_detached_stdout.log"),
+            "stderr_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_detached_stderr.log"),
+        }
+        fake_module = types.SimpleNamespace(
+            launch_benchmark_detached=mock.Mock(return_value=launch_payload),
+        )
+        with mock.patch.dict(sys.modules, {"benchmark_suite": fake_module}):
+            with redirect_stdout(output):
+                code = main(["benchmark-run-detached", "--config", str(self.root / "benchmark_config.json")])
+        self.assertEqual(code, 0)
+        self.assertIn("Benchmark detached run launched.", output.getvalue())
+        self.assertIn("PID: 8765", output.getvalue())
+
+    def test_benchmark_run_status_reads_summary(self) -> None:
+        output = io.StringIO()
+        status_payload = {
+            "output_dir": str(self.root / "outputs" / "benchmark_suite"),
+            "summary_path": str(self.root / "outputs" / "benchmark_suite" / "summary.json"),
+            "runtime_path": str(self.root / "outputs" / "benchmark_suite" / "runtime.csv"),
+            "progress_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_progress.json"),
+            "heartbeat_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_heartbeat.jsonl"),
+            "launch": {
+                "pid": 8765,
+                "stdout_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_detached_stdout.log"),
+                "stderr_path": str(self.root / "outputs" / "benchmark_suite" / "benchmark_detached_stderr.log"),
+            },
+            "progress": {
+                "status": "running",
+                "stage": "reliability_rows",
+                "updated_at": "2026-03-17T05:00:00",
+                "repeat_seed": 11,
+            },
+            "last_heartbeat": {
+                "timestamp": "2026-03-17T05:00:05",
+                "stage": "reliability_rows",
+                "step": "complete",
+            },
+            "summary": {
+                "canonical_setup": {
+                    "station_count": 96,
+                    "repeat_seeds": [7, 11, 19, 23, 29],
+                }
+            },
+        }
+        fake_module = types.SimpleNamespace(
+            benchmark_run_status=mock.Mock(return_value=status_payload),
+        )
+        with mock.patch.dict(sys.modules, {"benchmark_suite": fake_module}):
+            with redirect_stdout(output):
+                code = main(["benchmark-run-status", "--config", str(self.root / "benchmark_config.json")])
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("Output dir:", text)
+        self.assertIn("Last detached PID: 8765", text)
+        self.assertIn("Status: running", text)
+        self.assertIn("Stage: reliability_rows", text)
+        self.assertIn("Heartbeat step: complete", text)
+        self.assertIn("Stations: 96", text)
 
 
 if __name__ == "__main__":

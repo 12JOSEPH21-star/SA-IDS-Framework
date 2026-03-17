@@ -4,23 +4,26 @@ import csv
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
 
-KMA_SOURCE_CHOICES = ("asos_hourly", "aws_recent_1min")
+KMA_SOURCE_CHOICES = ("asos_hourly", "asos_hourly_apihub", "aws_recent_1min")
 KMA_DATA_TYPE_CHOICES = ("JSON", "XML")
 DEFAULT_KMA_PAGE_SIZE = 999
 DEFAULT_KMA_TIMEOUT = 30
 DEFAULT_KMA_RETRIES = 2
 ASOS_HOURLY_ENDPOINT = "http://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList"
+ASOS_APIHUB_ENDPOINT = "https://apihub.kma.go.kr/api/typ01/url/kma_sfctm3.php"
 AWS_RECENT_ENDPOINT = "https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-aws2_min"
 ASOS_OFFICIAL_PAGE = "https://www.data.go.kr/data/15057210/openapi.do"
+ASOS_API_HUB_PAGE = "https://apihub.kma.go.kr/apiList.do?apiSeq=2"
 AWS_API_HUB_PAGE = "https://www.data.go.kr/data/15139433/openapi.do"
 AWS_API_HUB_GUIDE = "https://apihub.kma.go.kr/static/file/%EA%B8%B0%EC%83%81%EC%B2%AD_API%ED%97%88%EB%B8%8C_%EC%82%AC%EC%9A%A9_%EB%B0%A9%EB%B2%95_%EC%95%88%EB%82%B4.pdf"
 AWS_STATION_INFO_ENDPOINT = "https://apihub.kma.go.kr/api/typ01/url/stn_inf.php"
@@ -84,6 +87,54 @@ AWS_APIHUB_FULL_HEADER = (
     "td",
 )
 AWS_APIHUB_FULL_HEADER_WITH_STATUS = AWS_APIHUB_FULL_HEADER + ("status",)
+ASOS_APIHUB_HEADER = (
+    "tm",
+    "stn",
+    "wd",
+    "ws",
+    "gst_wd",
+    "gst_ws",
+    "gst_tm",
+    "pa",
+    "ps",
+    "pt",
+    "pr",
+    "ta",
+    "td",
+    "hm",
+    "pv",
+    "rn",
+    "rn_day",
+    "rn_jun",
+    "rn_int",
+    "sd_hr3",
+    "sd_day",
+    "sd_tot",
+    "wc",
+    "wp",
+    "ww",
+    "ca_tot",
+    "ca_mid",
+    "ch_min",
+    "ct",
+    "ct_top",
+    "ct_mid",
+    "ct_low",
+    "vs",
+    "ss",
+    "si",
+    "st_gd",
+    "ts",
+    "te_005",
+    "te_01",
+    "te_02",
+    "te_03",
+    "st_sea",
+    "wh",
+    "bf",
+    "ir",
+    "ix",
+)
 
 
 @dataclass(frozen=True)
@@ -91,8 +142,8 @@ class KmaDownloadConfig:
     """Configuration for Korean weather-observation data downloads.
 
     Attributes:
-        source: Data source identifier. Supported values are `"asos_hourly"`
-            and `"aws_recent_1min"`.
+        source: Data source identifier. Supported values are `"asos_hourly"`,
+            `"asos_hourly_apihub"`, and `"aws_recent_1min"`.
         output_dir: Directory for manifests and CSV outputs.
         raw_csv_path: Optional raw API CSV output. Defaults to
             `<output_dir>/<source>_raw.csv`.
@@ -105,8 +156,9 @@ class KmaDownloadConfig:
             is omitted for AWS downloads.
         metadata_template_path: Optional CSV template path written from the
             provided station ids.
-        service_key: Optional source-specific credential. For ASOS, this is a
-            data.go.kr service key. For AWS API Hub, this is the `authKey`.
+        service_key: Optional source-specific credential. For `asos_hourly`,
+            this is a data.go.kr service key. For `asos_hourly_apihub` and
+            `aws_recent_1min`, this is the KMA API Hub `authKey`.
         start_date: Inclusive start date for ASOS hourly downloads.
         end_date: Inclusive end date for ASOS hourly downloads.
         start_hour: Inclusive start hour in `HH` format for ASOS hourly data.
@@ -159,7 +211,7 @@ class KmaDownloadConfig:
             raise ValueError("max_retries must be zero or greater.")
         if self.framework_config_path is not None and self.standardized_csv_path is None:
             raise ValueError("Framework config generation requires --standardized-csv.")
-        if self.source == "asos_hourly":
+        if self.source in {"asos_hourly", "asos_hourly_apihub"}:
             if self.start_date is None or self.end_date is None:
                 raise ValueError("ASOS hourly downloads require start_date and end_date.")
             if self.start_date > self.end_date:
@@ -239,7 +291,7 @@ def download_kma(
         ]
     else:
         if service_key is None:
-            if config.source == "aws_recent_1min":
+            if config.source in {"aws_recent_1min", "asos_hourly_apihub"}:
                 raise ValueError(
                     "A KMA API Hub authKey is required. Pass --service-key or set KMA_APIHUB_AUTH_KEY."
                 )
@@ -276,17 +328,31 @@ def download_kma(
     standardized_row_count = 0
     if standardized_csv_path is not None and not config.dry_run:
         metadata = _load_station_metadata(config.metadata_csv_path) if config.metadata_csv_path is not None else {}
-        if not metadata and config.source == "aws_recent_1min" and config.auto_station_metadata and service_key is not None:
-            metadata = _fetch_aws_station_metadata(
-                service_key=service_key,
-                observation_time=config.aws_datetime,
-                timeout=config.timeout,
-                max_retries=config.max_retries,
-                fetcher=active_fetcher,
-                station_ids=config.station_ids,
-            )
+        if not metadata and config.auto_station_metadata and service_key is not None:
+            if config.source == "aws_recent_1min":
+                metadata = _fetch_aws_station_metadata(
+                    service_key=service_key,
+                    observation_time=config.aws_datetime,
+                    timeout=config.timeout,
+                    max_retries=config.max_retries,
+                    fetcher=active_fetcher,
+                    station_ids=config.station_ids,
+                )
+            elif config.source == "asos_hourly_apihub":
+                metadata = _fetch_asos_station_metadata(
+                    service_key=service_key,
+                    observation_time=_resolve_asos_reference_datetime(config),
+                    timeout=config.timeout,
+                    max_retries=config.max_retries,
+                    fetcher=active_fetcher,
+                    station_ids=config.station_ids,
+                )
             if metadata:
-                resolved_metadata_csv_path = config.output_dir / "aws_station_metadata_auto.csv"
+                resolved_metadata_csv_path = config.output_dir / (
+                    "aws_station_metadata_auto.csv"
+                    if config.source == "aws_recent_1min"
+                    else "asos_station_metadata_auto.csv"
+                )
                 if resolved_metadata_csv_path.exists() and not config.overwrite:
                     raise FileExistsError(
                         f"{resolved_metadata_csv_path} already exists. Re-run with --overwrite to replace it."
@@ -380,8 +446,10 @@ def write_station_metadata_template(
     """
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"{output_path} already exists. Re-run with --overwrite to replace it.")
-    default_sensor_type = "asos" if source == "asos_hourly" else "aws"
-    default_modality = "synoptic_surface" if source == "asos_hourly" else "automatic_weather_station"
+    default_sensor_type = "asos" if source in {"asos_hourly", "asos_hourly_apihub"} else "aws"
+    default_modality = (
+        "synoptic_surface" if source in {"asos_hourly", "asos_hourly_apihub"} else "automatic_weather_station"
+    )
     rows = []
     for station_id in station_ids:
         rows.append(
@@ -446,7 +514,7 @@ def write_kma_framework_config(
 def _resolve_service_key(config: KmaDownloadConfig) -> tuple[str | None, str]:
     if config.service_key:
         return config.service_key.strip(), "cli"
-    if config.source == "aws_recent_1min":
+    if config.source in {"aws_recent_1min", "asos_hourly_apihub"}:
         for env_name in ("KMA_APIHUB_AUTH_KEY", "KMA_AUTH_KEY"):
             env_value = os.getenv(env_name)
             if env_value:
@@ -460,6 +528,8 @@ def _resolve_service_key(config: KmaDownloadConfig) -> tuple[str | None, str]:
 
 
 def _build_request_plan(config: KmaDownloadConfig) -> list[dict[str, Any]]:
+    if config.source == "asos_hourly_apihub":
+        return _build_asos_apihub_request_plan(config)
     if config.source == "asos_hourly":
         return [
             {
@@ -522,6 +592,8 @@ def _manifest_parameters(config: KmaDownloadConfig) -> dict[str, Any]:
 def _official_source_links(source: str) -> list[str]:
     if source == "asos_hourly":
         return [ASOS_OFFICIAL_PAGE]
+    if source == "asos_hourly_apihub":
+        return [ASOS_API_HUB_PAGE, AWS_API_HUB_GUIDE]
     return [AWS_API_HUB_PAGE, AWS_API_HUB_GUIDE]
 
 
@@ -604,8 +676,14 @@ def _fetch_with_retries(
 
 def _fetch_bytes(url: str, timeout: int) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "silence-aware-ids/1.0"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="ignore")
+        if error.code == 403 and "일일 최대 호출 건수 제한" in body:
+            raise RuntimeError("KMA API Hub daily quota exceeded. Retry after the next quota reset.") from error
+        raise RuntimeError(f"KMA request failed with HTTP {error.code}: {body[:200]}") from error
 
 
 def _parse_kma_response(
@@ -616,6 +694,8 @@ def _parse_kma_response(
 ) -> tuple[list[dict[str, str]], int | None]:
     if response_format == "apihub_text_csv":
         return _parse_apihub_text_csv_response(response_bytes)
+    if response_format == "apihub_text_whitespace":
+        return _parse_apihub_text_whitespace_response(response_bytes)
     if data_type == "JSON":
         return _parse_json_response(response_bytes)
     return _parse_xml_response(response_bytes)
@@ -650,6 +730,34 @@ def _parse_apihub_text_csv_response(response_bytes: bytes) -> tuple[list[dict[st
     return rows, len(rows)
 
 
+def _parse_apihub_text_whitespace_response(response_bytes: bytes) -> tuple[list[dict[str, str]], int | None]:
+    text = response_bytes.decode("utf-8", errors="ignore").replace("\ufeff", "")
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    header_tokens: list[str] | None = None
+    rows: list[dict[str, str]] = []
+    for line in lines:
+        stripped = line.strip()
+        header_candidate = stripped.lstrip("#").strip() if stripped.startswith("#") else stripped
+        tokens = header_candidate.split()
+        if not tokens:
+            continue
+        if header_tokens is None and _looks_like_text_header(tokens):
+            header_tokens = _normalize_header_tokens(tokens)
+            continue
+        if stripped.startswith("#"):
+            continue
+        if header_tokens is None:
+            header_tokens = _infer_apihub_whitespace_header(tokens)
+        if len(tokens) == len(header_tokens) - 1:
+            tokens = tokens + [""]
+        if len(tokens) != len(header_tokens):
+            continue
+        rows.append({header_tokens[index]: tokens[index] for index in range(len(header_tokens))})
+    if not rows:
+        raise RuntimeError(f"KMA API Hub returned no whitespace payload: {text[:200]}")
+    return rows, len(rows)
+
+
 def _looks_like_header(tokens: list[str]) -> bool:
     if not tokens:
         return False
@@ -658,11 +766,21 @@ def _looks_like_header(tokens: list[str]) -> bool:
     return alpha_count >= max(1, numeric_count)
 
 
+def _looks_like_text_header(tokens: list[str]) -> bool:
+    normalized = [token.strip("#").upper() for token in tokens]
+    header_hits = sum(token in {"TM", "STN", "WD", "WS", "TA", "HM", "PA", "PS", "RN"} for token in normalized)
+    return header_hits >= 4
+
+
 def _normalize_header_tokens(tokens: list[str]) -> list[str]:
+    alias_map = {
+        "yymmddhhmi": "tm",
+    }
     normalized: list[str] = []
     for token in tokens:
         cleaned = token.strip().lower()
         cleaned = cleaned.replace("/", "_").replace("-", "_").replace(" ", "_")
+        cleaned = alias_map.get(cleaned, cleaned)
         normalized.append(cleaned)
     return normalized
 
@@ -675,6 +793,12 @@ def _infer_apihub_header(values: list[str]) -> list[str]:
     if len(values) == len(AWS_APIHUB_FULL_HEADER_WITH_STATUS):
         return list(AWS_APIHUB_FULL_HEADER_WITH_STATUS)
     raise RuntimeError(f"Unsupported AWS API Hub row width: {len(values)} columns.")
+
+
+def _infer_apihub_whitespace_header(values: list[str]) -> list[str]:
+    if len(values) == len(ASOS_APIHUB_HEADER):
+        return list(ASOS_APIHUB_HEADER)
+    raise RuntimeError(f"Unsupported APIHUB whitespace row width: {len(values)} columns.")
 
 
 def _redact_secret_url(url: str) -> str:
@@ -811,6 +935,48 @@ def _fetch_aws_station_metadata(
     return metadata
 
 
+def _fetch_asos_station_metadata(
+    *,
+    service_key: str,
+    observation_time: datetime,
+    timeout: int,
+    max_retries: int,
+    fetcher: Callable[[str, int], bytes],
+    station_ids: tuple[str, ...],
+) -> dict[str, dict[str, str]]:
+    params = {
+        "inf": "SFC",
+        "stn": "",
+        "tm": observation_time.strftime("%Y%m%d%H%M"),
+        "help": "0",
+    }
+    url = _build_request_url(AWS_STATION_INFO_ENDPOINT, params, service_key)
+    response_bytes = _fetch_with_retries(url, timeout=timeout, max_retries=max_retries, fetcher=fetcher)
+    requested = {station_id for station_id in station_ids if station_id not in {"0", ""}}
+    metadata: dict[str, dict[str, str]] = {}
+    text = response_bytes.decode("utf-8", errors="ignore").replace("\ufeff", "")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        tokens = stripped.split()
+        if len(tokens) < 5:
+            continue
+        station_id = tokens[0]
+        if requested and station_id not in requested:
+            continue
+        metadata[station_id] = {
+            "station_id": station_id,
+            "longitude": tokens[1],
+            "latitude": tokens[2],
+            "elevation": tokens[4],
+            "sensor_type": "asos",
+            "sensor_group": "surface",
+            "sensor_modality": "synoptic_surface",
+        }
+    return metadata
+
+
 def _standardize_rows(
     rows: list[dict[str, str]],
     *,
@@ -864,11 +1030,14 @@ def _standardize_rows(
             ),
             "elevation": _prefer_metadata(metadata_row, row, "elevation", ("alt", "elevation", "height")),
             "cost": metadata_row.get("cost", ""),
-            "sensor_type": metadata_row.get("sensor_type", "asos" if source == "asos_hourly" else "aws"),
+            "sensor_type": metadata_row.get(
+                "sensor_type",
+                "asos" if source in {"asos_hourly", "asos_hourly_apihub"} else "aws",
+            ),
             "sensor_group": metadata_row.get("sensor_group", "surface"),
             "sensor_modality": metadata_row.get(
                 "sensor_modality",
-                "synoptic_surface" if source == "asos_hourly" else "automatic_weather_station",
+                "synoptic_surface" if source in {"asos_hourly", "asos_hourly_apihub"} else "automatic_weather_station",
             ),
             "site_type": metadata_row.get("site_type", ""),
             "maintenance_state": metadata_row.get("maintenance_state", ""),
@@ -941,3 +1110,46 @@ def _count_unique_csv_values(path: Path, *, column_name: str) -> int:
             if index < len(parts):
                 values.add(parts[index])
     return len(values)
+
+
+def _resolve_asos_reference_datetime(config: KmaDownloadConfig) -> datetime:
+    if config.start_date is None:
+        return datetime.utcnow()
+    return datetime.strptime(
+        f"{config.start_date.strftime('%Y%m%d')}{config.start_hour}",
+        "%Y%m%d%H",
+    )
+
+
+def _build_asos_apihub_request_plan(config: KmaDownloadConfig) -> list[dict[str, Any]]:
+    if config.start_date is None or config.end_date is None:
+        raise ValueError("ASOS API Hub downloads require start_date and end_date.")
+    start_ts = datetime.strptime(
+        f"{config.start_date.strftime('%Y%m%d')}{config.start_hour}",
+        "%Y%m%d%H",
+    )
+    end_ts = datetime.strptime(
+        f"{config.end_date.strftime('%Y%m%d')}{config.end_hour}",
+        "%Y%m%d%H",
+    )
+    requests: list[dict[str, Any]] = []
+    cursor = start_ts
+    station_token = "0" if set(config.station_ids) == {"0"} else ":".join(config.station_ids)
+    while cursor <= end_ts:
+        chunk_end = min(cursor + timedelta(days=30, hours=23), end_ts)
+        requests.append(
+            {
+                "endpoint": ASOS_APIHUB_ENDPOINT,
+                "station_id": station_token,
+                "params": {
+                    "tm1": cursor.strftime("%Y%m%d%H%M"),
+                    "tm2": chunk_end.strftime("%Y%m%d%H%M"),
+                    "stn": station_token,
+                    "help": "1",
+                },
+                "response_format": "apihub_text_whitespace",
+                "paginated": False,
+            }
+        )
+        cursor = chunk_end + timedelta(hours=1)
+    return requests

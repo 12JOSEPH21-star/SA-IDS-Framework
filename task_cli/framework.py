@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from experiment import ExperimentArtifacts
+    from experiment import ExperimentRunConfig, TabularDataConfig
+    from pipeline import SilenceAwareIDSConfig
+
+
+def _repo_root() -> Path:
+    """Return the repository root that contains the task_cli package."""
+    return Path(__file__).resolve().parent.parent
 
 
 def available_framework_presets() -> tuple[str, ...]:
@@ -126,7 +136,7 @@ def _preset_payload(preset: str, data_path: Path, *, relative_to: Path) -> dict[
             },
             "missingness": {
                 "mode": "selection",
-                "inference_strategy": "joint_variational",
+                "inference_strategy": "joint_generative",
                 "include_s": True,
                 "include_dynamic_residual": True,
                 "include_dynamic_threshold": True,
@@ -144,6 +154,12 @@ def _preset_payload(preset: str, data_path: Path, *, relative_to: Path) -> dict[
                 "kl_weight": 0.01,
                 "health_kl_weight": 0.01,
                 "health_reconstruction_weight": 0.1,
+                "generative_samples": 4,
+                "use_temporal_transition_prior": True,
+                "transition_time_index": 2,
+                "transition_group_key": "sensor_instance",
+                "transition_weight": 0.05,
+                "health_transition_weight": 0.01,
             },
             "policy": {
                 "utility_surrogate": "mi_proxy",
@@ -173,7 +189,7 @@ def _preset_payload(preset: str, data_path: Path, *, relative_to: Path) -> dict[
             },
             "state_training": {
                 "epochs": 5,
-                "training_strategy": "joint_variational",
+                "training_strategy": "joint_generative",
                 "batch_size": 64,
                 "learning_rate": 0.01,
                 "joint_missingness_weight": 1.0,
@@ -197,6 +213,8 @@ def _preset_payload(preset: str, data_path: Path, *, relative_to: Path) -> dict[
                 "gp_plus_sensor_conditional_missingness",
                 "gp_plus_joint_variational_missingness",
                 "gp_plus_joint_jvi_training",
+                "gp_plus_joint_generative_missingness",
+                "gp_plus_joint_generative_jvi_training",
                 "gp_plus_pattern_mixture_missingness",
                 "gp_plus_conformal_reliability",
                 "relational_reliability_baseline",
@@ -214,6 +232,8 @@ def _preset_payload(preset: str, data_path: Path, *, relative_to: Path) -> dict[
             "matmul_precision": "high",
             "prediction_batch_size": 512,
             "benchmark_expansion_factor": 4,
+            "enable_progress_artifacts": True,
+            "resume_from_checkpoint": True,
         },
         "output_path": "outputs/framework_run/summary.json",
     }
@@ -283,6 +303,140 @@ def run_framework(config_path: Path) -> "ExperimentArtifacts":
             "Install requirements from requirements-research.txt first."
         ) from exc
 
+    data_config, pipeline_config, run_config, output_path = load_framework_config(config_path)
+
+    runner = ResearchExperimentRunner(data_config, pipeline_config, run_config)
+    return runner.write_artifacts(output_path)
+
+
+def launch_framework_detached(
+    config_path: Path,
+    *,
+    python_executable: Path | None = None,
+) -> dict[str, object]:
+    """Launch one framework run as a detached background process.
+
+    Args:
+        config_path: Path to a framework config JSON file.
+        python_executable: Optional interpreter override.
+
+    Returns:
+        Metadata describing the detached launch and its log files.
+    """
+    resolved_config = config_path.resolve()
+    _, _, _, output_path = load_framework_config(resolved_config)
+    output_dir = output_path.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    stdout_path = output_dir / "framework_detached_stdout.log"
+    stderr_path = output_dir / "framework_detached_stderr.log"
+    launch_path = output_dir / "framework_detached_launch.json"
+    chosen_python = (python_executable or Path(sys.executable)).resolve()
+
+    stdout_handle = stdout_path.open("ab")
+    stderr_handle = stderr_path.open("ab")
+    try:
+        creationflags = 0
+        if hasattr(subprocess, "DETACHED_PROCESS"):
+            creationflags |= subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+
+        process = subprocess.Popen(
+            [
+                str(chosen_python),
+                "-m",
+                "task_cli",
+                "framework-run",
+                "--config",
+                str(resolved_config),
+            ],
+            cwd=str(_repo_root()),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+            close_fds=True,
+            creationflags=creationflags,
+        )
+    finally:
+        stdout_handle.close()
+        stderr_handle.close()
+
+    payload = {
+        "pid": int(process.pid),
+        "config_path": str(resolved_config),
+        "output_path": str(output_path),
+        "stdout_path": str(stdout_path),
+        "stderr_path": str(stderr_path),
+        "python_executable": str(chosen_python),
+        "launched_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    launch_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    return payload
+
+
+def framework_run_status(config_path: Path) -> dict[str, object]:
+    """Read the latest persisted framework-run status for one config.
+
+    Args:
+        config_path: Path to a framework config JSON file.
+
+    Returns:
+        Serialized progress information and known artifact paths.
+    """
+    resolved_config = config_path.resolve()
+    _, _, _, output_path = load_framework_config(resolved_config)
+    output_dir = output_path.parent
+    progress_path = output_dir / "framework_progress.json"
+    launch_path = output_dir / "framework_detached_launch.json"
+    checkpoint_path = output_dir / "framework_run_checkpoint.pt"
+    heartbeat_path = output_dir / "framework_heartbeat.jsonl"
+
+    progress: dict[str, object] | None = None
+    if progress_path.exists():
+        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+
+    launch_payload: dict[str, object] | None = None
+    if launch_path.exists():
+        launch_payload = json.loads(launch_path.read_text(encoding="utf-8"))
+
+    last_heartbeat: dict[str, object] | None = None
+    if heartbeat_path.exists():
+        last_line = ""
+        with heartbeat_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+        if last_line:
+            try:
+                last_heartbeat = json.loads(last_line)
+            except json.JSONDecodeError:
+                last_heartbeat = None
+
+    return {
+        "config_path": str(resolved_config),
+        "output_path": str(output_path),
+        "progress_path": str(progress_path),
+        "checkpoint_path": str(checkpoint_path),
+        "launch_path": str(launch_path),
+        "heartbeat_path": str(heartbeat_path),
+        "progress": progress,
+        "launch": launch_payload,
+        "last_heartbeat": last_heartbeat,
+    }
+
+
+def load_framework_config(
+    config_path: Path,
+) -> tuple["TabularDataConfig", "SilenceAwareIDSConfig", "ExperimentRunConfig", Path]:
+    """Load typed framework components from a JSON config file."""
+    from experiment import ExperimentRunConfig, TabularDataConfig
+    from models import MissingMechanismConfig, ObservationModelConfig, SparseGPConfig
+    from pipeline import MissingnessTrainingConfig, SilenceAwareIDSConfig, StateTrainingConfig
+    from policy import InformationPolicyConfig
+    from reliability import ConformalConfig
+
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     base_dir = config_path.parent
     data_payload = dict(payload.get("data", {}))
@@ -315,7 +469,11 @@ def run_framework(config_path: Path) -> "ExperimentArtifacts":
         prediction_batch_size=run_payload.get("prediction_batch_size"),
         benchmark_expansion_factor=int(run_payload.get("benchmark_expansion_factor", 1)),
         benchmark_candidate_pool_size=run_payload.get("benchmark_candidate_pool_size"),
+        enable_progress_artifacts=bool(run_payload.get("enable_progress_artifacts", True)),
+        resume_from_checkpoint=bool(run_payload.get("resume_from_checkpoint", True)),
+        max_train_rows=run_payload.get("max_train_rows"),
+        max_calibration_rows=run_payload.get("max_calibration_rows"),
+        max_evaluation_rows=run_payload.get("max_evaluation_rows"),
+        auto_scale_large_runs=bool(run_payload.get("auto_scale_large_runs", True)),
     )
-
-    runner = ResearchExperimentRunner(data_config, pipeline_config, run_config)
-    return runner.write_artifacts(output_path)
+    return data_config, pipeline_config, run_config, output_path

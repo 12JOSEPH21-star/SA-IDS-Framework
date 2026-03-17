@@ -11,6 +11,7 @@ from pathlib import Path
 
 from task_cli.app import main
 from task_cli.kma import (
+    ASOS_API_HUB_PAGE,
     ASOS_OFFICIAL_PAGE,
     AWS_API_HUB_GUIDE,
     AWS_API_HUB_PAGE,
@@ -130,6 +131,69 @@ class KmaCliTests(unittest.TestCase):
         manifest = json.loads(artifacts.manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["auth_source"], "cli")
         self.assertIn(ASOS_OFFICIAL_PAGE, manifest["official_sources"])
+
+    def test_download_kma_asos_apihub_text_response_is_standardized(self) -> None:
+        output_dir = self.root / "kma_asos_apihub"
+
+        requested_urls: list[str] = []
+
+        def fetcher(url: str, timeout: int) -> bytes:
+            del timeout
+            requested_urls.append(url)
+            if "stn_inf.php" in url:
+                text = "\n".join(
+                    [
+                        "#START7777",
+                        "108 126.9667 37.5714 101 86.4 SEOUL",
+                    ]
+                )
+                return text.encode("utf-8")
+            text = "\n".join(
+                [
+                    "# YYMMDDHHMI STN WD WS GST_WD GST_WS GST_TM PA PS PT PR TA TD HM PV RN RN_DAY RN_JUN RN_INT SD_HR3 SD_DAY SD_TOT WC WP WW CA_TOT CA_MID CH_MIN CT CT_TOP CT_MID CT_LOW VS SS SI ST_GD TS TE_005 TE_01 TE_02 TE_03 ST_SEA WH BF IR IX",
+                    "202501010000 108 200 2.4 0 0.0 0 1012.1 1021.0 0.0 0.0 1.2 -5.0 55 4.2 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0 0 0 3 0 1200 SC 3000 0 0 20000 0.0 0.0 0.0 0.1 0.2 0.3 0.4 10.0 0.0 2 0.0 0",
+                ]
+            )
+            return text.encode("utf-8")
+
+        artifacts = download_kma(
+            KmaDownloadConfig(
+                source="asos_hourly_apihub",
+                output_dir=output_dir,
+                standardized_csv_path=output_dir / "asos_apihub_framework.csv",
+                framework_config_path=self.root / "framework_kma_apihub.json",
+                service_key="example-auth-key",
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 1),
+                station_ids=("108",),
+            ),
+            fetcher=fetcher,
+        )
+
+        self.assertEqual(artifacts.row_count, 1)
+        self.assertTrue(requested_urls)
+        self.assertIn("authKey=example-auth-key", requested_urls[0])
+        self.assertIn("tm1=202501010000", requested_urls[0])
+        self.assertIn("tm2=202501012300", requested_urls[0])
+        self.assertIn("stn=108", requested_urls[0])
+        self.assertTrue(
+            artifacts.resolved_metadata_csv_path is not None and artifacts.resolved_metadata_csv_path.exists()
+        )
+        with artifacts.standardized_csv_path.open("r", encoding="utf-8", newline="") as handle:  # type: ignore[union-attr]
+            row = next(csv.DictReader(handle))
+        self.assertEqual(row["timestamp"], "2025-01-01T00:00")
+        self.assertEqual(row["station_id"], "108")
+        self.assertEqual(row["temperature"], "1.2")
+        self.assertEqual(row["humidity"], "55")
+        self.assertEqual(row["pressure"], "1021.0")
+        self.assertEqual(row["wind_speed"], "2.4")
+        self.assertEqual(row["wind_direction"], "200")
+        self.assertEqual(row["latitude"], "37.5714")
+        self.assertEqual(row["longitude"], "126.9667")
+        self.assertEqual(row["sensor_type"], "asos")
+        manifest = json.loads(artifacts.manifest_path.read_text(encoding="utf-8"))
+        self.assertIn(ASOS_API_HUB_PAGE, manifest["official_sources"])
+        self.assertIn(AWS_API_HUB_GUIDE, manifest["official_sources"])
 
     def test_download_kma_aws_dry_run_writes_manifest_and_template(self) -> None:
         output_dir = self.root / "kma"
@@ -318,7 +382,34 @@ class KmaCliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertTrue((output_dir / "kma_download_manifest.json").exists())
-        self.assertIn("Planned KMA asos_hourly download", output.getvalue())
+
+    def test_app_kma_download_command_supports_asos_apihub_dry_run(self) -> None:
+        output_dir = self.root / "app_run_apihub"
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            code = main(
+                [
+                    "kma-download",
+                    "--source",
+                    "asos_hourly_apihub",
+                    "--output-dir",
+                    str(output_dir),
+                    "--station-ids",
+                    "108",
+                    "--start-date",
+                    "2025-01-01",
+                    "--end-date",
+                    "2025-01-02",
+                    "--dry-run",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        manifest = json.loads((output_dir / "kma_download_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["source"], "asos_hourly_apihub")
+        self.assertIn(ASOS_API_HUB_PAGE, manifest["official_sources"])
+        self.assertIn("Planned KMA asos_hourly_apihub download", output.getvalue())
 
 
 if __name__ == "__main__":

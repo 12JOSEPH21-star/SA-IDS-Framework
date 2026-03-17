@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import gc
+import hashlib
 import json
 import logging
 import math
@@ -132,6 +134,12 @@ class ExperimentRunConfig:
     prediction_batch_size: int | None = None
     benchmark_expansion_factor: int = 1
     benchmark_candidate_pool_size: int | None = None
+    enable_progress_artifacts: bool = True
+    resume_from_checkpoint: bool = True
+    max_train_rows: int | None = None
+    max_calibration_rows: int | None = None
+    max_evaluation_rows: int | None = None
+    auto_scale_large_runs: bool = True
 
     def __post_init__(self) -> None:
         valid_precision = {"highest", "high", "medium"}
@@ -143,6 +151,13 @@ class ExperimentRunConfig:
             raise ValueError("prediction_batch_size must be positive when provided.")
         if self.benchmark_candidate_pool_size is not None and self.benchmark_candidate_pool_size <= 0:
             raise ValueError("benchmark_candidate_pool_size must be positive when provided.")
+        for name, value in (
+            ("max_train_rows", self.max_train_rows),
+            ("max_calibration_rows", self.max_calibration_rows),
+            ("max_evaluation_rows", self.max_evaluation_rows),
+        ):
+            if value is not None and value <= 0:
+                raise ValueError(f"{name} must be positive when provided.")
 
 
 @dataclass
@@ -197,6 +212,8 @@ class ExperimentArtifacts:
     sensitivity_path: Path
     selection_path: Path
     report_path: Path
+    progress_path: Path | None = None
+    checkpoint_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -219,6 +236,128 @@ def _selection_to_summary(selection: dict[str, Any] | None) -> dict[str, Any] | 
         else:
             summary[key] = value
     return summary
+
+
+def _serialize_fit_summary(summary: PipelineFitSummary | None) -> dict[str, Any] | None:
+    """Convert a fit summary into a JSON-friendly payload."""
+    if summary is None:
+        return None
+    return {
+        "state_history": summary.state_history,
+        "observation_history": summary.observation_history,
+        "dynamic_silence_threshold": summary.dynamic_silence_threshold,
+        "missingness_history": summary.missingness_history,
+        "conformal_quantile": summary.conformal_quantile,
+    }
+
+
+def _deserialize_fit_summary(payload: dict[str, Any] | None) -> PipelineFitSummary | None:
+    """Restore a fit summary from serialized checkpoint state."""
+    if payload is None:
+        return None
+    return PipelineFitSummary(
+        state_history=dict(payload.get("state_history", {})),
+        observation_history=payload.get("observation_history"),
+        dynamic_silence_threshold=payload.get("dynamic_silence_threshold"),
+        missingness_history=payload.get("missingness_history"),
+        conformal_quantile=payload.get("conformal_quantile"),
+    )
+
+
+def _serialize_ablation_outcomes(outcomes: dict[str, AblationOutcome]) -> dict[str, Any]:
+    """Convert ablation outcomes into checkpoint-friendly payloads."""
+    serialized: dict[str, Any] = {}
+    for name, outcome in outcomes.items():
+        serialized[name] = {
+            "variant_name": outcome.variant_name,
+            "metrics": outcome.metrics,
+            "report": outcome.report,
+            "selection": _selection_to_summary(outcome.selection),
+        }
+    return serialized
+
+
+def _deserialize_ablation_outcomes(payload: dict[str, Any] | None) -> dict[str, AblationOutcome]:
+    """Restore ablation outcomes from serialized checkpoint state."""
+    if not payload:
+        return {}
+    restored: dict[str, AblationOutcome] = {}
+    for name, outcome in payload.items():
+        restored[name] = AblationOutcome(
+            variant_name=str(outcome.get("variant_name", name)),
+            metrics=dict(outcome.get("metrics", {})),
+            report=dict(outcome.get("report", {})),
+            selection=outcome.get("selection"),
+        )
+    return restored
+
+
+def _deserialize_experiment_result(payload: dict[str, Any]) -> ExperimentResult:
+    """Restore an experiment result from serialized checkpoint state."""
+    return ExperimentResult(
+        fit_summary=_deserialize_fit_summary(payload.get("fit_summary")) or PipelineFitSummary(state_history={}),
+        base_metrics=dict(payload.get("base_metrics", {})),
+        ablations=_deserialize_ablation_outcomes(payload.get("ablations")),
+        sensitivity=dict(payload.get("sensitivity", {})),
+        selection=payload.get("selection"),
+        dataset_summary=dict(payload.get("dataset_summary", {})),
+        runtime_environment=dict(payload.get("runtime_environment", {})),
+        reproducibility=dict(payload.get("reproducibility", {})),
+        benchmark=payload.get("benchmark"),
+    )
+
+
+def _batch_to_cache_dict(batch: TensorBatch) -> dict[str, Any]:
+    """Serialize a tensor batch for torch.save cache reuse."""
+    return {
+        "X": batch.X.cpu(),
+        "y": batch.y.cpu(),
+        "context": None if batch.context is None else batch.context.cpu(),
+        "M": None if batch.M is None else batch.M.cpu(),
+        "S": None if batch.S is None else batch.S.cpu(),
+        "missing_indicator": batch.missing_indicator.cpu(),
+        "cost": None if batch.cost is None else batch.cost.cpu(),
+        "indices": batch.indices.cpu(),
+        "sensor_metadata": {
+            "sensor_instance": None if batch.sensor_metadata.sensor_instance is None else batch.sensor_metadata.sensor_instance.cpu(),
+            "sensor_type": None if batch.sensor_metadata.sensor_type is None else batch.sensor_metadata.sensor_type.cpu(),
+            "sensor_group": None if batch.sensor_metadata.sensor_group is None else batch.sensor_metadata.sensor_group.cpu(),
+            "sensor_modality": None if batch.sensor_metadata.sensor_modality is None else batch.sensor_metadata.sensor_modality.cpu(),
+            "installation_environment": (
+                None
+                if batch.sensor_metadata.installation_environment is None
+                else batch.sensor_metadata.installation_environment.cpu()
+            ),
+            "maintenance_state": (
+                None if batch.sensor_metadata.maintenance_state is None else batch.sensor_metadata.maintenance_state.cpu()
+            ),
+            "continuous": None if batch.sensor_metadata.continuous is None else batch.sensor_metadata.continuous.cpu(),
+        },
+    }
+
+
+def _batch_from_cache_dict(payload: dict[str, Any]) -> TensorBatch:
+    """Restore a tensor batch from cached torch.save payloads."""
+    metadata = payload["sensor_metadata"]
+    return TensorBatch(
+        X=payload["X"],
+        y=payload["y"],
+        context=payload["context"],
+        M=payload["M"],
+        S=payload["S"],
+        missing_indicator=payload["missing_indicator"],
+        cost=payload["cost"],
+        sensor_metadata=SensorMetadataBatch(
+            sensor_instance=metadata["sensor_instance"],
+            sensor_type=metadata["sensor_type"],
+            sensor_group=metadata["sensor_group"],
+            sensor_modality=metadata["sensor_modality"],
+            installation_environment=metadata["installation_environment"],
+            maintenance_state=metadata["maintenance_state"],
+            continuous=metadata["continuous"],
+        ),
+        indices=payload["indices"],
+    )
 
 
 class WeatherDatasetAdapter:
@@ -403,6 +542,7 @@ class WeatherDatasetAdapter:
                         tensor[row_index] = mapping[row[column_name].strip()]
 
         sensor_metadata = SensorMetadataBatch(
+            sensor_instance=None,
             sensor_type=categorical_tensors["sensor_type"],
             sensor_group=categorical_tensors["sensor_group"],
             sensor_modality=categorical_tensors["sensor_modality"],
@@ -410,6 +550,15 @@ class WeatherDatasetAdapter:
             maintenance_state=categorical_tensors["maintenance_state"],
             continuous=continuous_tensor,
         )
+        station_mapping: dict[str, int] = {}
+        sensor_instance = torch.empty(scan_summary.row_count, dtype=torch.long, device=device)
+        with self.config.data_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row_index, row in enumerate(reader):
+                station_value = row[self.config.station_id_column].strip()
+                station_mapping.setdefault(station_value, len(station_mapping))
+                sensor_instance[row_index] = station_mapping[station_value]
+        sensor_metadata.sensor_instance = sensor_instance
 
         metadata_cardinalities = {
             "sensor_type": len(scan_summary.metadata_mappings["sensor_type"]),
@@ -513,6 +662,7 @@ class WeatherDatasetAdapter:
             missing_indicator=encoded["missing_indicator"][indices],
             cost=None if encoded["cost"] is None else encoded["cost"][indices],
             sensor_metadata=SensorMetadataBatch(
+                sensor_instance=None if sensor_metadata.sensor_instance is None else sensor_metadata.sensor_instance[indices],
                 sensor_type=None if sensor_metadata.sensor_type is None else sensor_metadata.sensor_type[indices],
                 sensor_group=None if sensor_metadata.sensor_group is None else sensor_metadata.sensor_group[indices],
                 sensor_modality=(
@@ -612,6 +762,114 @@ class ResearchExperimentRunner:
         return self.dataset_adapter.prepare()
 
     @staticmethod
+    def _slice_metadata_rows(metadata: SensorMetadataBatch, indices: Tensor) -> SensorMetadataBatch:
+        """Slice sensor metadata along the leading row dimension."""
+        return SensorMetadataBatch(
+            sensor_instance=metadata.sensor_instance[indices],
+            sensor_type=metadata.sensor_type[indices],
+            sensor_group=metadata.sensor_group[indices],
+            sensor_modality=metadata.sensor_modality[indices],
+            installation_environment=metadata.installation_environment[indices],
+            maintenance_state=metadata.maintenance_state[indices],
+            continuous=None if metadata.continuous is None else metadata.continuous[indices],
+        )
+
+    @classmethod
+    def _slice_batch_rows(cls, batch: TensorBatch, indices: Tensor) -> TensorBatch:
+        """Slice a tensor batch along rows while preserving alignment."""
+        return TensorBatch(
+            X=batch.X[indices],
+            y=batch.y[indices],
+            context=None if batch.context is None else batch.context[indices],
+            M=None if batch.M is None else batch.M[indices],
+            S=None if batch.S is None else batch.S[indices],
+            missing_indicator=batch.missing_indicator[indices],
+            cost=None if batch.cost is None else batch.cost[indices],
+            sensor_metadata=cls._slice_metadata_rows(batch.sensor_metadata, indices),
+            indices=batch.indices[indices],
+        )
+
+    @staticmethod
+    def _row_cap_indices(num_rows: int, max_rows: int, *, device: torch.device) -> Tensor:
+        """Build evenly spaced chronological indices for large-row caps."""
+        if num_rows <= max_rows:
+            return torch.arange(num_rows, device=device, dtype=torch.long)
+        linspace = torch.linspace(
+            0,
+            num_rows - 1,
+            steps=max_rows,
+            device=device,
+            dtype=torch.float64,
+        )
+        return torch.unique_consecutive(torch.round(linspace).to(dtype=torch.long))
+
+    def _effective_row_caps(self, prepared: PreparedExperimentData) -> tuple[int | None, int | None, int | None]:
+        """Resolve explicit or automatic row caps for large framework runs."""
+        train_cap = self.run_config.max_train_rows
+        calibration_cap = self.run_config.max_calibration_rows
+        evaluation_cap = self.run_config.max_evaluation_rows
+        if train_cap is not None or calibration_cap is not None or evaluation_cap is not None:
+            return train_cap, calibration_cap, evaluation_cap
+        if not self.run_config.auto_scale_large_runs:
+            return None, None, None
+        train_rows = int(prepared.train.X.shape[0])
+        calibration_rows = int(prepared.calibration.X.shape[0])
+        evaluation_rows = int(prepared.evaluation.X.shape[0])
+        if train_rows <= 500_000 and calibration_rows <= 100_000 and evaluation_rows <= 100_000:
+            return None, None, None
+        return 131_072, 32_768, 32_768
+
+    def _maybe_cap_prepared_data(self, prepared: PreparedExperimentData) -> tuple[PreparedExperimentData, dict[str, Any]]:
+        """Downsample very large prepared splits to stable framework-run caps."""
+        train_cap, calibration_cap, evaluation_cap = self._effective_row_caps(prepared)
+        caps_payload = {
+            "applied": False,
+            "train_cap": train_cap,
+            "calibration_cap": calibration_cap,
+            "evaluation_cap": evaluation_cap,
+            "original_train_rows": int(prepared.train.X.shape[0]),
+            "original_calibration_rows": int(prepared.calibration.X.shape[0]),
+            "original_evaluation_rows": int(prepared.evaluation.X.shape[0]),
+        }
+        if train_cap is None and calibration_cap is None and evaluation_cap is None:
+            return prepared, caps_payload
+
+        def cap_batch(batch: TensorBatch, max_rows: int | None) -> TensorBatch:
+            if max_rows is None or batch.X.shape[0] <= max_rows:
+                return batch
+            indices = self._row_cap_indices(int(batch.X.shape[0]), int(max_rows), device=batch.X.device)
+            return self._slice_batch_rows(batch, indices)
+
+        retained_full = prepared.full
+        retained_full_source = "full"
+        if self.run_config.use_evaluation_as_candidate_pool:
+            retained_full = cap_batch(prepared.evaluation, evaluation_cap)
+            retained_full_source = "evaluation_proxy"
+
+        capped = PreparedExperimentData(
+            full=retained_full,
+            train=cap_batch(prepared.train, train_cap),
+            calibration=cap_batch(prepared.calibration, calibration_cap),
+            evaluation=cap_batch(prepared.evaluation, evaluation_cap),
+            metadata_cardinalities=prepared.metadata_cardinalities,
+            feature_schema=prepared.feature_schema,
+        )
+        caps_payload["applied"] = True
+        caps_payload["effective_train_rows"] = int(capped.train.X.shape[0])
+        caps_payload["effective_calibration_rows"] = int(capped.calibration.X.shape[0])
+        caps_payload["effective_evaluation_rows"] = int(capped.evaluation.X.shape[0])
+        caps_payload["retained_full_rows"] = int(capped.full.X.shape[0])
+        caps_payload["retained_full_source"] = retained_full_source
+        return capped, caps_payload
+
+    def _effective_inference_batch_size(self, row_caps: dict[str, Any]) -> int:
+        """Resolve a memory-safe inference batch size for framework runs."""
+        batch_size = self.run_config.prediction_batch_size or self.pipeline_config.state_training.batch_size
+        if row_caps.get("applied"):
+            batch_size = min(int(batch_size), 128)
+        return max(int(batch_size), 1)
+
+    @staticmethod
     def _repeat_rows(tensor: Tensor | None, repeats: int, *, limit: int | None = None) -> Tensor | None:
         """Repeat a tensor along the leading dimension for benchmark stress tests."""
         if tensor is None:
@@ -632,6 +890,7 @@ class ResearchExperimentRunner:
     ) -> SensorMetadataBatch:
         """Repeat sensor metadata rows for benchmark-scale candidate pools."""
         return SensorMetadataBatch(
+            sensor_instance=cls._repeat_rows(metadata.sensor_instance, repeats, limit=limit),
             sensor_type=cls._repeat_rows(metadata.sensor_type, repeats, limit=limit),
             sensor_group=cls._repeat_rows(metadata.sensor_group, repeats, limit=limit),
             sensor_modality=cls._repeat_rows(metadata.sensor_modality, repeats, limit=limit),
@@ -729,6 +988,386 @@ class ResearchExperimentRunner:
             "selection": selection,
         }
 
+    def _checkpoint_signature(self) -> dict[str, Any]:
+        """Build a lightweight signature to validate resume checkpoints."""
+        return {
+            "data_path": str(self.data_config.data_path.resolve()),
+            "target_column": self.data_config.target_column,
+            "variant_names": list(self.run_config.variant_names),
+            "train_ratio": self.data_config.train_ratio,
+            "calibration_ratio": self.data_config.calibration_ratio,
+            "split_strategy": self.data_config.split_strategy,
+            "state_epochs": self.pipeline_config.state_training.epochs,
+            "missingness_epochs": self.pipeline_config.missingness_training.epochs,
+            "prediction_batch_size": self.run_config.prediction_batch_size,
+            "benchmark_expansion_factor": self.run_config.benchmark_expansion_factor,
+            "max_train_rows": self.run_config.max_train_rows,
+            "max_calibration_rows": self.run_config.max_calibration_rows,
+            "max_evaluation_rows": self.run_config.max_evaluation_rows,
+            "auto_scale_large_runs": self.run_config.auto_scale_large_runs,
+        }
+
+    @staticmethod
+    def _progress_paths(output_path: Path) -> tuple[Path, Path]:
+        """Return progress and checkpoint paths for one framework run."""
+        output_dir = output_path.parent
+        return output_dir / "framework_progress.json", output_dir / "framework_run_checkpoint.pt"
+
+    @staticmethod
+    def _heartbeat_path(output_path: Path) -> Path:
+        """Return the detached heartbeat trace path for one framework run."""
+        return output_path.parent / "framework_heartbeat.jsonl"
+
+    @staticmethod
+    def _append_heartbeat(
+        path: Path,
+        *,
+        stage: str,
+        step: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        """Append one JSONL heartbeat event for detached debugging."""
+        event = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "stage": stage,
+            "step": step,
+            "payload": {} if payload is None else payload,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    def _prepared_cache_signature(self) -> dict[str, Any]:
+        """Build a compatibility signature for prepared-data caches."""
+        return {
+            "checkpoint_signature": self._checkpoint_signature(),
+            "data_mtime_ns": self.data_config.data_path.stat().st_mtime_ns,
+        }
+
+    def _prepared_cache_path(self, output_path: Path) -> Path:
+        """Resolve the prepared-data cache path for one framework run."""
+        output_dir = output_path.parent
+        cache_dir = output_dir / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha1(
+            json.dumps(self._prepared_cache_signature(), sort_keys=True).encode("utf-8")
+        ).hexdigest()[:12]
+        return cache_dir / f"prepared_{digest}.pt"
+
+    def _try_load_prepared_cache(self, cache_path: Path) -> tuple[PreparedExperimentData, dict[str, Any]] | None:
+        """Load cached prepared data when the signature matches."""
+        if not cache_path.exists():
+            return None
+        payload = torch.load(cache_path, map_location="cpu", weights_only=False)
+        if payload.get("signature") != self._prepared_cache_signature():
+            return None
+        prepared = PreparedExperimentData(
+            full=_batch_from_cache_dict(payload["full"]),
+            train=_batch_from_cache_dict(payload["train"]),
+            calibration=_batch_from_cache_dict(payload["calibration"]),
+            evaluation=_batch_from_cache_dict(payload["evaluation"]),
+            metadata_cardinalities=dict(payload["metadata_cardinalities"]),
+            feature_schema=dict(payload["feature_schema"]),
+        )
+        row_caps = dict(payload.get("row_caps", {}))
+        return prepared, row_caps
+
+    def _save_prepared_cache(
+        self,
+        cache_path: Path,
+        prepared: PreparedExperimentData,
+        row_caps: dict[str, Any],
+    ) -> None:
+        """Persist capped prepared splits for fast framework-run resume."""
+        torch.save(
+            {
+                "signature": self._prepared_cache_signature(),
+                "full": _batch_to_cache_dict(prepared.full),
+                "train": _batch_to_cache_dict(prepared.train),
+                "calibration": _batch_to_cache_dict(prepared.calibration),
+                "evaluation": _batch_to_cache_dict(prepared.evaluation),
+                "metadata_cardinalities": prepared.metadata_cardinalities,
+                "feature_schema": prepared.feature_schema,
+                "row_caps": row_caps,
+            },
+            cache_path,
+        )
+
+    def _load_checkpoint(self, checkpoint_path: Path) -> dict[str, Any] | None:
+        """Load a compatible checkpoint when resume is enabled."""
+        if not self.run_config.resume_from_checkpoint or not checkpoint_path.exists():
+            return None
+        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        if payload.get("signature") != self._checkpoint_signature():
+            return None
+        return payload
+
+    @staticmethod
+    def _serialize_reliability_state(pipeline: SilenceAwareIDS) -> dict[str, Any] | None:
+        """Serialize non-module reliability state that is not in pipeline.state_dict()."""
+        reliability = pipeline.reliability_model
+        if reliability is None:
+            return None
+        return {
+            "q_hat": None if reliability._q_hat is None else float(reliability._q_hat.item()),
+            "n_calibration": int(reliability._n_calibration),
+            "adaptive_epsilon": float(reliability._adaptive_epsilon),
+            "calibration_scores": None
+            if reliability._calibration_scores is None
+            else reliability._calibration_scores.detach().cpu(),
+            "graph_feature_dim": reliability._graph_feature_dim,
+            "graph_adapter_state_dict": None
+            if reliability._graph_adapter is None
+            else reliability._graph_adapter.state_dict(),
+            "graph_calibration_features": None
+            if reliability._graph_calibration_features is None
+            else reliability._graph_calibration_features.detach().cpu(),
+            "graph_calibration_scores": None
+            if reliability._graph_calibration_scores is None
+            else reliability._graph_calibration_scores.detach().cpu(),
+        }
+
+    @staticmethod
+    def _restore_reliability_state(pipeline: SilenceAwareIDS, payload: dict[str, Any] | None) -> None:
+        """Restore reliability state into a freshly constructed pipeline."""
+        reliability = pipeline.reliability_model
+        if reliability is None or payload is None:
+            return
+        device = next(pipeline.parameters()).device
+        dtype = next(pipeline.parameters()).dtype
+        q_hat = payload.get("q_hat")
+        reliability._q_hat = None if q_hat is None else torch.tensor(float(q_hat), device=device, dtype=dtype)
+        reliability._n_calibration = int(payload.get("n_calibration", 0))
+        reliability._adaptive_epsilon = float(payload.get("adaptive_epsilon", reliability.config.epsilon))
+        calibration_scores = payload.get("calibration_scores")
+        reliability._calibration_scores = None if calibration_scores is None else calibration_scores.to(device=device, dtype=dtype)
+        reliability._graph_feature_dim = payload.get("graph_feature_dim")
+        reliability._graph_calibration_features = None
+        graph_features = payload.get("graph_calibration_features")
+        if graph_features is not None:
+            reliability._graph_calibration_features = graph_features.to(device=device, dtype=dtype)
+        reliability._graph_calibration_scores = None
+        graph_scores = payload.get("graph_calibration_scores")
+        if graph_scores is not None:
+            reliability._graph_calibration_scores = graph_scores.to(device=device, dtype=dtype)
+        graph_state = payload.get("graph_adapter_state_dict")
+        graph_dim = payload.get("graph_feature_dim")
+        if graph_state is not None and graph_dim is not None:
+            reliability._ensure_graph_adapter(int(graph_dim), device=device, dtype=dtype)
+            if reliability._graph_adapter is not None:
+                reliability._graph_adapter.load_state_dict(graph_state)
+
+    def _serialize_pipeline_checkpoint(self, pipeline: SilenceAwareIDS) -> dict[str, Any]:
+        """Serialize fitted pipeline state for checkpoint/resume."""
+        return {
+            "module_state_dict": pipeline.state_dict(),
+            "reliability_state": self._serialize_reliability_state(pipeline),
+            "fault_detection_threshold": pipeline._fault_detection_threshold,
+            "fault_component_stats": pipeline._fault_component_stats,
+        }
+
+    def _restore_pipeline_checkpoint(self, pipeline: SilenceAwareIDS, payload: dict[str, Any] | None) -> None:
+        """Restore fitted pipeline state from a saved checkpoint."""
+        if payload is None:
+            return
+        pipeline.load_state_dict(payload["module_state_dict"])
+        pipeline._fault_detection_threshold = payload.get("fault_detection_threshold")
+        pipeline._fault_component_stats = payload.get("fault_component_stats")
+        self._restore_reliability_state(pipeline, payload.get("reliability_state"))
+
+    def _write_progress_payload(
+        self,
+        *,
+        path: Path,
+        summary_path: Path,
+        status: str,
+        stage: str,
+        runtime_environment: dict[str, Any],
+        reproducibility: dict[str, Any],
+        dataset_summary: dict[str, Any] | None = None,
+        fit_summary: PipelineFitSummary | None = None,
+        base_metrics: dict[str, float] | None = None,
+        ablations: dict[str, AblationOutcome] | None = None,
+        sensitivity: dict[str, dict[str, float]] | None = None,
+        selection: dict[str, Any] | None = None,
+        benchmark: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Write a stage-progress snapshot and partial summary."""
+        payload = {
+            "status": status,
+            "stage": stage,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "error": error,
+            "fit_summary": _serialize_fit_summary(fit_summary),
+            "base_metrics": {} if base_metrics is None else base_metrics,
+            "ablations": _serialize_ablation_outcomes({} if ablations is None else ablations),
+            "completed_ablation_variants": [] if ablations is None else list(ablations.keys()),
+            "sensitivity": {} if sensitivity is None else sensitivity,
+            "selection": selection,
+            "dataset_summary": {} if dataset_summary is None else dataset_summary,
+            "runtime_environment": runtime_environment,
+            "reproducibility": reproducibility,
+            "benchmark": benchmark,
+            "is_partial": status != "completed",
+        }
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        summary_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _save_checkpoint(
+        self,
+        checkpoint_path: Path,
+        *,
+        stage: str,
+        pipeline: SilenceAwareIDS | None = None,
+        fit_summary: PipelineFitSummary | None = None,
+        base_metrics: dict[str, float] | None = None,
+        ablations: dict[str, AblationOutcome] | None = None,
+        sensitivity: dict[str, dict[str, float]] | None = None,
+        selection: dict[str, Any] | None = None,
+        dataset_summary: dict[str, Any] | None = None,
+        runtime_environment: dict[str, Any] | None = None,
+        reproducibility: dict[str, Any] | None = None,
+        benchmark: dict[str, Any] | None = None,
+        completed_result: ExperimentResult | None = None,
+    ) -> None:
+        """Persist pipeline and metric state for resume."""
+        payload = {
+            "signature": self._checkpoint_signature(),
+            "stage": stage,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "pipeline_state": None if pipeline is None else self._serialize_pipeline_checkpoint(pipeline),
+            "fit_summary": _serialize_fit_summary(fit_summary),
+            "base_metrics": {} if base_metrics is None else base_metrics,
+            "ablations": _serialize_ablation_outcomes({} if ablations is None else ablations),
+            "sensitivity": {} if sensitivity is None else sensitivity,
+            "selection": selection,
+            "dataset_summary": {} if dataset_summary is None else dataset_summary,
+            "runtime_environment": {} if runtime_environment is None else runtime_environment,
+            "reproducibility": {} if reproducibility is None else reproducibility,
+            "benchmark": benchmark,
+            "completed_result": None if completed_result is None else completed_result.to_dict(),
+        }
+        torch.save(payload, checkpoint_path)
+
+    def _run_ablation_suite_incremental(
+        self,
+        base_pipeline: SilenceAwareIDS,
+        X_train: Tensor,
+        y_train: Tensor,
+        X_eval: Tensor,
+        y_eval: Tensor,
+        *,
+        missing_indicator_train: Tensor | None,
+        context_train: Tensor | None,
+        M_train: Tensor | None,
+        S_train: Tensor | None,
+        sensor_metadata_train: SensorMetadataBatch | dict[str, Tensor] | None,
+        context_eval: Tensor | None,
+        M_eval: Tensor | None,
+        S_eval: Tensor | None,
+        sensor_metadata_eval: SensorMetadataBatch | dict[str, Tensor] | None,
+        X_cal: Tensor | None,
+        y_cal: Tensor | None,
+        context_cal: Tensor | None,
+        M_cal: Tensor | None,
+        S_cal: Tensor | None,
+        sensor_metadata_cal: SensorMetadataBatch | dict[str, Tensor] | None,
+        candidate_x: Tensor | None,
+        candidate_cost: Tensor | None,
+        candidate_context: Tensor | None,
+        candidate_M: Tensor | None,
+        candidate_S: Tensor | None,
+        candidate_sensor_metadata: SensorMetadataBatch | dict[str, Tensor] | None,
+        budget: float | None,
+        max_selections: int | None,
+        variant_names: list[str] | None,
+        batch_size: int | None,
+        existing_results: dict[str, AblationOutcome] | None = None,
+        on_variant_complete: Any | None = None,
+    ) -> dict[str, AblationOutcome]:
+        """Run ablations one variant at a time so progress can be checkpointed."""
+        variants = base_pipeline.build_ablation_configs()
+        active_names = variant_names or list(variants.keys())
+        results = dict(existing_results or {})
+        for variant_name in active_names:
+            if variant_name in results:
+                continue
+            if variant_name not in variants:
+                raise KeyError(f"Unknown ablation variant: {variant_name}")
+            variant = SilenceAwareIDS(variants[variant_name])
+            fit_summary = variant.fit(
+                X_train,
+                y_train,
+                missing_indicator_train=missing_indicator_train,
+                context_train=context_train,
+                M_train=M_train,
+                S_train=S_train,
+                sensor_metadata_train=sensor_metadata_train,
+                X_cal=X_cal,
+                y_cal=y_cal,
+                context_cal=context_cal,
+                M_cal=M_cal,
+                S_cal=S_cal,
+                sensor_metadata_cal=sensor_metadata_cal,
+            )
+            eval_s = S_eval
+            if eval_s is None and variant.config.use_m2:
+                eval_s = variant.detect_silence(
+                    X_eval,
+                    y_eval,
+                    context=context_eval,
+                    sensor_metadata=sensor_metadata_eval,
+                    batch_size=batch_size,
+                )["dynamic_silence"].float()
+            metrics = variant.evaluate_predictions(
+                X_eval,
+                y_eval,
+                context=context_eval,
+                M=M_eval,
+                S=eval_s,
+                sensor_metadata=sensor_metadata_eval,
+                integrate_missingness=variant.use_m3,
+                batch_size=batch_size,
+            )
+            selection: dict[str, Tensor | list[int] | float] | None = None
+            if candidate_x is not None and candidate_cost is not None:
+                selection = variant.select_sensors(
+                    candidate_x,
+                    candidate_cost,
+                    context=candidate_context,
+                    M=candidate_M,
+                    S=candidate_S,
+                    sensor_metadata=candidate_sensor_metadata,
+                    budget=budget,
+                    max_selections=max_selections,
+                    batch_size=batch_size,
+                )
+            report = variant.ablation_report()
+            report["fit_summary"] = {
+                "state_epochs": len(fit_summary.state_history.get("loss", [])),
+                "observation_steps": (
+                    None
+                    if fit_summary.observation_history is None
+                    else len(fit_summary.observation_history.get("loss", []))
+                ),
+                "dynamic_silence_threshold": fit_summary.dynamic_silence_threshold,
+                "missingness_epochs": (
+                    None
+                    if fit_summary.missingness_history is None
+                    else len(fit_summary.missingness_history.get("loss", []))
+                ),
+                "conformal_quantile": fit_summary.conformal_quantile,
+            }
+            results[variant_name] = AblationOutcome(
+                variant_name=variant_name,
+                metrics=metrics,
+                report=report,
+                selection=selection,
+            )
+            if on_variant_complete is not None:
+                on_variant_complete(variant_name, results)
+        return results
+
     def run(self) -> ExperimentResult:
         """Run fitting, ablation study, sensitivity analysis, and policy selection.
 
@@ -736,10 +1375,17 @@ class ResearchExperimentRunner:
             Experiment result bundle.
         """
         reproducibility = self._configure_runtime()
-        prepared = self.prepare_data()
+        prepared_raw = self.prepare_data()
+        prepared, row_caps = self._maybe_cap_prepared_data(prepared_raw)
+        del prepared_raw
+        gc.collect()
         resolved_pipeline_config = self._resolve_pipeline_config(prepared)
+        resolved_pipeline_config = self._stabilize_pipeline_config_for_large_runs(
+            resolved_pipeline_config,
+            row_caps=row_caps,
+        )
         pipeline = SilenceAwareIDS(resolved_pipeline_config)
-        inference_batch_size = self.run_config.prediction_batch_size
+        inference_batch_size = self._effective_inference_batch_size(row_caps)
 
         fit_summary = pipeline.fit(
             prepared.train.X,
@@ -756,6 +1402,7 @@ class ResearchExperimentRunner:
             S_cal=prepared.calibration.S,
             sensor_metadata_cal=prepared.calibration.sensor_metadata,
         )
+        gc.collect()
 
         evaluation_s = prepared.evaluation.S
         if pipeline.config.use_m2 and evaluation_s is not None and torch.count_nonzero(evaluation_s).item() == 0:
@@ -845,6 +1492,8 @@ class ResearchExperimentRunner:
             "train_rows": int(prepared.train.X.shape[0]),
             "calibration_rows": int(prepared.calibration.X.shape[0]),
             "evaluation_rows": int(prepared.evaluation.X.shape[0]),
+            "row_caps": row_caps,
+            "effective_reliability_mode": resolved_pipeline_config.reliability.mode,
             "input_dim": int(prepared.full.X.shape[1]),
             "context_dim": 0 if prepared.full.context is None else int(prepared.full.context.shape[1]),
             "metadata_cardinalities": prepared.metadata_cardinalities,
@@ -862,6 +1511,437 @@ class ResearchExperimentRunner:
             reproducibility=reproducibility,
             benchmark=benchmark,
         )
+
+    def _run_with_checkpoint(self, output_path: Path) -> tuple[ExperimentResult, Path, Path]:
+        """Run the framework with incremental progress artifacts and resume support."""
+        output_dir = output_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        progress_path, checkpoint_path = self._progress_paths(output_path)
+        heartbeat_path = self._heartbeat_path(output_path)
+        prepared_cache_path = self._prepared_cache_path(output_path)
+        checkpoint = self._load_checkpoint(checkpoint_path)
+        if checkpoint is not None and checkpoint.get("stage") == "completed" and checkpoint.get("completed_result"):
+            result = _deserialize_experiment_result(checkpoint["completed_result"])
+            self._write_progress_payload(
+                path=progress_path,
+                summary_path=output_path,
+                status="completed",
+                stage="completed",
+                runtime_environment=result.runtime_environment,
+                reproducibility=result.reproducibility,
+                dataset_summary=result.dataset_summary,
+                fit_summary=result.fit_summary,
+                base_metrics=result.base_metrics,
+                ablations=result.ablations,
+                sensitivity=result.sensitivity,
+                selection=result.selection,
+                benchmark=result.benchmark,
+            )
+            return result, progress_path, checkpoint_path
+
+        reproducibility = self._configure_runtime()
+        runtime_environment = self._runtime_environment()
+        fit_summary: PipelineFitSummary | None = None
+        base_metrics: dict[str, float] | None = None
+        ablations: dict[str, AblationOutcome] = {}
+        sensitivity: dict[str, dict[str, float]] = {}
+        selection: dict[str, Any] | None = None
+        benchmark: dict[str, Any] | None = None
+        dataset_summary: dict[str, Any] | None = None
+
+        try:
+            self._write_progress_payload(
+                path=progress_path,
+                summary_path=output_path,
+                status="running",
+                stage="preparing_data",
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+            )
+            cached_prepared = self._try_load_prepared_cache(prepared_cache_path)
+            if cached_prepared is None:
+                prepared_raw = self.prepare_data()
+                prepared, row_caps = self._maybe_cap_prepared_data(prepared_raw)
+                del prepared_raw
+                gc.collect()
+                self._save_prepared_cache(prepared_cache_path, prepared, row_caps)
+            else:
+                prepared, row_caps = cached_prepared
+                gc.collect()
+            resolved_pipeline_config = self._resolve_pipeline_config(prepared)
+            resolved_pipeline_config = self._stabilize_pipeline_config_for_large_runs(
+                resolved_pipeline_config,
+                row_caps=row_caps,
+            )
+            pipeline = SilenceAwareIDS(resolved_pipeline_config)
+            inference_batch_size = self._effective_inference_batch_size(row_caps)
+            dataset_summary = {
+                "train_rows": int(prepared.train.X.shape[0]),
+                "calibration_rows": int(prepared.calibration.X.shape[0]),
+                "evaluation_rows": int(prepared.evaluation.X.shape[0]),
+                "row_caps": row_caps,
+                "effective_reliability_mode": resolved_pipeline_config.reliability.mode,
+                "input_dim": int(prepared.full.X.shape[1]),
+                "context_dim": 0 if prepared.full.context is None else int(prepared.full.context.shape[1]),
+                "metadata_cardinalities": prepared.metadata_cardinalities,
+                "feature_schema": prepared.feature_schema,
+            }
+
+            if checkpoint is not None:
+                fit_summary = _deserialize_fit_summary(checkpoint.get("fit_summary"))
+                base_metrics = checkpoint.get("base_metrics") or None
+                ablations = _deserialize_ablation_outcomes(checkpoint.get("ablations"))
+                sensitivity = dict(checkpoint.get("sensitivity") or {})
+                selection = checkpoint.get("selection")
+                benchmark = checkpoint.get("benchmark")
+                if checkpoint.get("pipeline_state") is not None:
+                    self._restore_pipeline_checkpoint(pipeline, checkpoint.get("pipeline_state"))
+
+            if fit_summary is None:
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="fitting_base_pipeline",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                )
+                fit_summary = pipeline.fit(
+                    prepared.train.X,
+                    prepared.train.y,
+                    missing_indicator_train=prepared.train.missing_indicator,
+                    context_train=prepared.train.context,
+                    M_train=prepared.train.M,
+                    S_train=prepared.train.S,
+                    sensor_metadata_train=prepared.train.sensor_metadata,
+                    X_cal=prepared.calibration.X,
+                    y_cal=prepared.calibration.y,
+                    context_cal=prepared.calibration.context,
+                    M_cal=prepared.calibration.M,
+                    S_cal=prepared.calibration.S,
+                    sensor_metadata_cal=prepared.calibration.sensor_metadata,
+                )
+                gc.collect()
+                self._save_checkpoint(
+                    checkpoint_path,
+                    stage="fit_complete",
+                    pipeline=pipeline,
+                    fit_summary=fit_summary,
+                    dataset_summary=dataset_summary,
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                )
+
+            evaluation_s = prepared.evaluation.S
+            if pipeline.config.use_m2 and evaluation_s is not None and torch.count_nonzero(evaluation_s).item() == 0:
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="evaluating_base_pipeline",
+                    step="evaluation_silence_start",
+                    payload={"rows": int(prepared.evaluation.X.shape[0])},
+                )
+                evaluation_s = pipeline.detect_silence(
+                    prepared.evaluation.X,
+                    prepared.evaluation.y,
+                    context=prepared.evaluation.context,
+                    sensor_metadata=prepared.evaluation.sensor_metadata,
+                    batch_size=inference_batch_size,
+                )["dynamic_silence"].float()
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="evaluating_base_pipeline",
+                    step="evaluation_silence_complete",
+                    payload={"flagged": int(evaluation_s.sum().item())},
+                )
+
+            if base_metrics is None:
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="evaluating_base_pipeline",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                    fit_summary=fit_summary,
+                )
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="evaluating_base_pipeline",
+                    step="dispatch",
+                    payload={
+                        "rows": int(prepared.evaluation.X.shape[0]),
+                        "batch_size": int(inference_batch_size),
+                        "use_m3": bool(pipeline.use_m3),
+                        "use_m5": bool(pipeline.use_m5),
+                    },
+                )
+                base_metrics = pipeline.evaluate_predictions(
+                    prepared.evaluation.X,
+                    prepared.evaluation.y,
+                    context=prepared.evaluation.context,
+                    M=prepared.evaluation.M,
+                    S=evaluation_s,
+                    sensor_metadata=prepared.evaluation.sensor_metadata,
+                    integrate_missingness=pipeline.use_m3,
+                    batch_size=inference_batch_size,
+                    progress_callback=lambda step, payload: self._append_heartbeat(
+                        heartbeat_path,
+                        stage="evaluating_base_pipeline",
+                        step=step,
+                        payload=payload,
+                    ),
+                )
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="evaluating_base_pipeline",
+                    step="persist_base_metrics",
+                    payload={"metric_keys": sorted(base_metrics.keys())},
+                )
+                self._save_checkpoint(
+                    checkpoint_path,
+                    stage="base_metrics_complete",
+                    pipeline=pipeline,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                    dataset_summary=dataset_summary,
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                )
+
+            candidate_batch = prepared.evaluation if self.run_config.use_evaluation_as_candidate_pool else prepared.full
+            if selection is None and candidate_batch.cost is not None:
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="selecting_policy_candidates",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                )
+                raw_selection = pipeline.select_sensors(
+                    candidate_batch.X,
+                    candidate_batch.cost,
+                    context=candidate_batch.context,
+                    M=candidate_batch.M,
+                    S=candidate_batch.S,
+                    sensor_metadata=candidate_batch.sensor_metadata,
+                    budget=self.run_config.policy_budget,
+                    max_selections=self.run_config.max_selections,
+                    batch_size=inference_batch_size,
+                )
+                selection = _selection_to_summary(raw_selection)
+                self._save_checkpoint(
+                    checkpoint_path,
+                    stage="selection_complete",
+                    pipeline=pipeline,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                    selection=selection,
+                    dataset_summary=dataset_summary,
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                )
+
+            self._write_progress_payload(
+                path=progress_path,
+                summary_path=output_path,
+                status="running",
+                stage="running_ablations",
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+                dataset_summary=dataset_summary,
+                fit_summary=fit_summary,
+                base_metrics=base_metrics,
+                ablations=ablations,
+                selection=selection,
+            )
+            ablations = self._run_ablation_suite_incremental(
+                pipeline,
+                prepared.train.X,
+                prepared.train.y,
+                prepared.evaluation.X,
+                prepared.evaluation.y,
+                missing_indicator_train=prepared.train.missing_indicator,
+                context_train=prepared.train.context,
+                M_train=prepared.train.M,
+                S_train=prepared.train.S,
+                sensor_metadata_train=prepared.train.sensor_metadata,
+                context_eval=prepared.evaluation.context,
+                M_eval=prepared.evaluation.M,
+                S_eval=evaluation_s,
+                sensor_metadata_eval=prepared.evaluation.sensor_metadata,
+                X_cal=prepared.calibration.X,
+                y_cal=prepared.calibration.y,
+                context_cal=prepared.calibration.context,
+                M_cal=prepared.calibration.M,
+                S_cal=prepared.calibration.S,
+                sensor_metadata_cal=prepared.calibration.sensor_metadata,
+                candidate_x=candidate_batch.X,
+                candidate_cost=candidate_batch.cost,
+                candidate_context=candidate_batch.context,
+                candidate_M=candidate_batch.M,
+                candidate_S=candidate_batch.S,
+                candidate_sensor_metadata=candidate_batch.sensor_metadata,
+                budget=self.run_config.policy_budget,
+                max_selections=self.run_config.max_selections,
+                variant_names=list(self.run_config.variant_names) if self.run_config.variant_names else None,
+                batch_size=inference_batch_size,
+                existing_results=ablations,
+                on_variant_complete=lambda _name, results: (
+                    self._save_checkpoint(
+                        checkpoint_path,
+                        stage="ablations_in_progress",
+                        pipeline=pipeline,
+                        fit_summary=fit_summary,
+                        base_metrics=base_metrics,
+                        ablations=results,
+                        selection=selection,
+                        dataset_summary=dataset_summary,
+                        runtime_environment=runtime_environment,
+                        reproducibility=reproducibility,
+                    ),
+                    self._write_progress_payload(
+                        path=progress_path,
+                        summary_path=output_path,
+                        status="running",
+                        stage="running_ablations",
+                        runtime_environment=runtime_environment,
+                        reproducibility=reproducibility,
+                        dataset_summary=dataset_summary,
+                        fit_summary=fit_summary,
+                        base_metrics=base_metrics,
+                        ablations=results,
+                        selection=selection,
+                    ),
+                ),
+            )
+
+            if pipeline.use_m3 and not sensitivity:
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="running_sensitivity",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                    ablations=ablations,
+                    selection=selection,
+                )
+                sensitivity = pipeline.run_missingness_sensitivity_analysis(
+                    prepared.evaluation.X,
+                    prepared.evaluation.y,
+                    logit_scales=list(self.run_config.sensitivity_logit_scales),
+                    context=prepared.evaluation.context,
+                    M=prepared.evaluation.M,
+                    S=evaluation_s,
+                    sensor_metadata=prepared.evaluation.sensor_metadata,
+                    batch_size=inference_batch_size,
+                )
+                self._save_checkpoint(
+                    checkpoint_path,
+                    stage="sensitivity_complete",
+                    pipeline=pipeline,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                    ablations=ablations,
+                    sensitivity=sensitivity,
+                    selection=selection,
+                    dataset_summary=dataset_summary,
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                )
+
+            if benchmark is None:
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="running_benchmark",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                    ablations=ablations,
+                    sensitivity=sensitivity,
+                    selection=selection,
+                )
+                benchmark = self._run_large_scale_benchmark(pipeline, prepared)
+
+            result = ExperimentResult(
+                fit_summary=fit_summary,
+                base_metrics=base_metrics or {},
+                ablations=ablations,
+                sensitivity=sensitivity,
+                selection=selection,
+                dataset_summary=dataset_summary or {},
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+                benchmark=benchmark,
+            )
+            self._save_checkpoint(
+                checkpoint_path,
+                stage="completed",
+                pipeline=pipeline,
+                fit_summary=fit_summary,
+                base_metrics=base_metrics,
+                ablations=ablations,
+                sensitivity=sensitivity,
+                selection=selection,
+                dataset_summary=dataset_summary,
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+                benchmark=benchmark,
+                completed_result=result,
+            )
+            self._write_progress_payload(
+                path=progress_path,
+                summary_path=output_path,
+                status="completed",
+                stage="completed",
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+                dataset_summary=dataset_summary,
+                fit_summary=fit_summary,
+                base_metrics=base_metrics,
+                ablations=ablations,
+                sensitivity=sensitivity,
+                selection=selection,
+                benchmark=benchmark,
+            )
+            return result, progress_path, checkpoint_path
+        except Exception as exc:
+            self._append_heartbeat(
+                heartbeat_path,
+                stage="failed",
+                step="exception",
+                payload={"error": str(exc)},
+            )
+            self._write_progress_payload(
+                path=progress_path,
+                summary_path=output_path,
+                status="failed",
+                stage="failed",
+                runtime_environment=runtime_environment,
+                reproducibility=reproducibility,
+                dataset_summary=dataset_summary,
+                fit_summary=fit_summary,
+                base_metrics=base_metrics,
+                ablations=ablations,
+                sensitivity=sensitivity,
+                selection=selection,
+                benchmark=benchmark,
+                error=str(exc),
+            )
+            raise
 
     def write_summary(self, output_path: Path, result: ExperimentResult | None = None) -> Path:
         """Write an experiment summary to JSON.
@@ -896,9 +1976,14 @@ class ResearchExperimentRunner:
         Returns:
             Paths to all written artifacts.
         """
-        resolved_result = self.run() if result is None else result
         output_dir = output_path.parent
         output_dir.mkdir(parents=True, exist_ok=True)
+        progress_path, checkpoint_path = self._progress_paths(output_path)
+
+        if result is None:
+            resolved_result, progress_path, checkpoint_path = self._run_with_checkpoint(output_path)
+        else:
+            resolved_result = result
 
         summary_path = self.write_summary(output_path, resolved_result)
         ablations_path = output_dir / "ablations.csv"
@@ -974,6 +2059,8 @@ class ResearchExperimentRunner:
             sensitivity_path=sensitivity_path,
             selection_path=selection_path,
             report_path=report_path,
+            progress_path=progress_path if self.run_config.enable_progress_artifacts else None,
+            checkpoint_path=checkpoint_path if self.run_config.resume_from_checkpoint else None,
         )
 
     def _resolve_pipeline_config(self, prepared: PreparedExperimentData) -> SilenceAwareIDSConfig:
@@ -1034,6 +2121,28 @@ class ResearchExperimentRunner:
             observation=resolved_observation,
             missingness=resolved_missingness,
         )
+
+    def _stabilize_pipeline_config_for_large_runs(
+        self,
+        config: SilenceAwareIDSConfig,
+        *,
+        row_caps: dict[str, Any],
+    ) -> SilenceAwareIDSConfig:
+        """Apply conservative reliability overrides after large-run downsampling."""
+        if not bool(row_caps.get("applied")):
+            return config
+        reliability = config.reliability
+        if reliability.mode == "graph_corel":
+            return replace(
+                config,
+                reliability=replace(
+                    reliability,
+                    mode="relational_adaptive",
+                    adaptation_rate=max(reliability.adaptation_rate, 0.05),
+                    relational_neighbor_weight=max(reliability.relational_neighbor_weight, 0.1),
+                ),
+            )
+        return config
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:

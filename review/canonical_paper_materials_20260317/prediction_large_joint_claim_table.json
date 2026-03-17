@@ -1,0 +1,22 @@
+[
+  {
+    "benchmark_key": "large_joint",
+    "benchmark_label": "Joint Korea Large",
+    "mechanism": "state_dependent_mnar",
+    "missing_intensity": "0.700000",
+    "aggregation_mode": "multi_seed_mean_with_percentile_bootstrap_ci",
+    "baseline_variant": "homogeneous_missingness",
+    "baseline_crps_mean": "15.399801",
+    "baseline_crps_ci_low": "15.313305",
+    "baseline_crps_ci_high": "15.486297",
+    "proposed_variant": "full_joint_jvi_training",
+    "proposed_crps_mean": "7.968896",
+    "proposed_crps_ci_low": "6.550819",
+    "proposed_crps_ci_high": "9.893678",
+    "delta_crps_mean": "7.430905",
+    "n_seeds": 5,
+    "seed_list": "7,11,19,23,29",
+    "commit_hash": "1a2a07695c53adf3fbb798818d9935e58e70517c",
+    "generated_at": "2026-03-17T11:28:40+00:00"
+  }
+]

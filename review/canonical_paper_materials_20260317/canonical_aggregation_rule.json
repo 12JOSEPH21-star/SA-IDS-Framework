@@ -1,0 +1,18 @@
+{
+  "aggregation_mode": "multi_seed_mean_with_percentile_bootstrap_ci",
+  "ci_level": 0.95,
+  "bootstrap_alpha": 0.05,
+  "bootstrap_samples": 4096,
+  "bootstrap_seed": 20260317,
+  "paper_primary_statistic": "multi-seed mean",
+  "paper_uncertainty_statistic": "percentile bootstrap confidence interval over seed-level rows",
+  "best_single_seed_rule": "reported for audit only; not used as the paper primary statistic",
+  "significance_test": "paired exact sign test on per-seed deltas with bootstrap CI on the mean delta",
+  "significance_alpha": 0.05,
+  "prediction_primary_metric": "crps",
+  "prediction_baseline_variant": "gp_only",
+  "reliability_primary_metric": "target_coverage_error",
+  "reliability_baseline_variant": "split_conformal",
+  "generated_at": "2026-03-17T11:28:32+00:00",
+  "commit_hash": "1a2a07695c53adf3fbb798818d9935e58e70517c"
+}

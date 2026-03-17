@@ -1,0 +1,49 @@
+{
+  "framework_config_path": "C:\\Programming Prctice\\data\\noaa_isd_korea_q2_2025\\framework_isd_q2.json",
+  "output_dir": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q2_medium",
+  "preset": "medium",
+  "station_limit": 16,
+  "station_offset": 0,
+  "temporal_stride_hours": 3,
+  "max_train_rows": 8192,
+  "max_calibration_rows": 2048,
+  "max_evaluation_rows": 2048,
+  "state_epochs": 2,
+  "missingness_epochs": 2,
+  "inducing_points": 24,
+  "prediction_batch_size": 384,
+  "target_coverage": 0.9,
+  "shift_fraction": 0.35,
+  "policy_budget": null,
+  "max_selections": 5,
+  "missing_intensities": [
+    0.3,
+    0.5,
+    0.7
+  ],
+  "predictive_mechanisms": [
+    "mar",
+    "state_dependent_mnar",
+    "value_dependent_mnar"
+  ],
+  "fault_scenarios": [
+    "random_dropout",
+    "block_missingness",
+    "frozen_sensor",
+    "drift",
+    "spike_burst",
+    "extreme_event_confound"
+  ],
+  "cache_prepared_data": true,
+  "repeat_seeds": [
+    7,
+    11,
+    19,
+    23,
+    29
+  ],
+  "region_holdout_variants": [],
+  "bootstrap_samples": 256,
+  "significance_alpha": 0.05,
+  "seed": 7
+}

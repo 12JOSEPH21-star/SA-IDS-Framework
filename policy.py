@@ -29,6 +29,7 @@ class InformationPolicyConfig:
     novelty_floor: float = 1e-3
     ratio_epsilon: float = 1e-6
     mutual_information_scale: float = 0.5
+    route_distance_weight: float = 0.0
     planning_horizon: int = 3
     future_discount: float = 0.8
     lookahead_strength: float = 0.5
@@ -66,6 +67,8 @@ class InformationPolicyConfig:
             raise ValueError("redundancy_strength must lie in (0, 1].")
         if self.mutual_information_scale <= 0.0:
             raise ValueError("mutual_information_scale must be positive.")
+        if self.route_distance_weight < 0.0:
+            raise ValueError("route_distance_weight must be non-negative.")
         if self.planning_horizon <= 0:
             raise ValueError("planning_horizon must be positive.")
         if not 0.0 < self.future_discount <= 1.0:
@@ -317,6 +320,10 @@ class LazyGreedyOptimizer:
                         device=candidate_x.device,
                         dtype=candidate_x.dtype,
                     ),
+                    self._route_distance_vector(candidate_x, cache).view(-1, 1).to(
+                        device=candidate_x.device,
+                        dtype=candidate_x.dtype,
+                    ),
                 ]
             )
             if active_budget is not None:
@@ -329,8 +336,56 @@ class LazyGreedyOptimizer:
                         device=candidate_x.device,
                         dtype=candidate_x.dtype,
                     )
-                )
+            )
         return torch.cat(features, dim=-1)
+
+    def _route_distance_vector(self, candidate_x: Tensor, cache: LazyGreedyCache) -> Tensor:
+        """Return nearest-route distances for every candidate with shape `[N]`."""
+        if candidate_x.ndim != 2:
+            raise ValueError(f"candidate_x must have shape [N, D], received {tuple(candidate_x.shape)}.")
+        route_distance = torch.zeros(candidate_x.shape[0], device=candidate_x.device, dtype=candidate_x.dtype)
+        if not torch.any(cache.selected_mask):
+            return route_distance
+        distance_dims = self._resolve_distance_dims(candidate_x.shape[-1])
+        selected_points = candidate_x[cache.selected_mask][:, distance_dims]
+        candidate_points = candidate_x[:, distance_dims]
+        pairwise = torch.cdist(candidate_points, selected_points, p=2)
+        route_distance = pairwise.amin(dim=-1)
+        route_distance[cache.selected_mask] = 0.0
+        return route_distance
+
+    def _effective_operational_cost(
+        self,
+        cost: Tensor,
+        *,
+        route_distance: Tensor | None = None,
+    ) -> Tensor:
+        """Combine sensing and route costs into one effective operational cost."""
+        effective_cost = cost
+        if route_distance is not None:
+            effective_cost = effective_cost + self.config.route_distance_weight * torch.clamp(
+                route_distance,
+                min=0.0,
+            )
+        return torch.clamp(effective_cost, min=self.config.ratio_epsilon)
+
+    def _route_distance_for_candidate(
+        self,
+        index: int,
+        candidate_x: Tensor | None,
+        cache: LazyGreedyCache,
+    ) -> Tensor | None:
+        """Return the incremental route distance for one candidate."""
+        if (
+            candidate_x is None
+            or self.config.route_distance_weight <= 0.0
+            or not torch.any(cache.selected_mask)
+        ):
+            return None
+        distance_dims = self._resolve_distance_dims(candidate_x.shape[-1])
+        selected_points = candidate_x[cache.selected_mask][:, distance_dims]
+        candidate_point = candidate_x[index, distance_dims].unsqueeze(0)
+        return torch.cdist(candidate_point, selected_points, p=2).amin()
 
     def _ensure_policy_network(self, input_dim: int, *, device: torch.device, dtype: torch.dtype) -> None:
         """Create or reinitialize the PPO warm-start network for the current feature width."""
@@ -768,6 +823,108 @@ class LazyGreedyOptimizer:
             logits, _ = self.policy_network(features)
         return torch.sigmoid(logits / self.config.ppo_temperature)
 
+    def _policy_prior_bonus(
+        self,
+        policy_prior: Tensor,
+        candidate_x: Tensor,
+        candidate_cost: Tensor,
+        *,
+        cache: LazyGreedyCache | None = None,
+    ) -> Tensor:
+        """Convert policy probabilities into route-aware upper-bound bonuses."""
+        if cache is None:
+            route_distance = torch.zeros_like(candidate_cost)
+        else:
+            route_distance = self._route_distance_vector(candidate_x, cache)
+        effective_cost = self._effective_operational_cost(candidate_cost, route_distance=route_distance)
+        return policy_prior / effective_cost
+
+    def _screen_with_policy_prior(
+        self,
+        upper_bounds: Tensor,
+        policy_prior: Tensor | None,
+        candidate_x: Tensor,
+        candidate_cost: Tensor,
+        *,
+        cache: LazyGreedyCache,
+        active_limit: int | None = None,
+    ) -> Tensor:
+        """Use PPO priors only to shortlist very large candidate pools."""
+        if policy_prior is None or upper_bounds.numel() <= self.config.ppo_max_candidates:
+            return upper_bounds
+
+        valid_mask = ~cache.selected_mask
+        valid_count = int(valid_mask.sum().item())
+        if valid_count <= self.config.ppo_max_candidates:
+            return upper_bounds
+
+        shortlist_size = min(self.config.ppo_max_candidates, valid_count)
+        reserve = max(1, int(active_limit) if active_limit is not None else self.config.planning_horizon)
+        probe_size = min(valid_count, max(shortlist_size // 2, reserve * 8))
+        neg_inf = upper_bounds.new_tensor(float("-inf"))
+        valid_upper = upper_bounds.masked_fill(~valid_mask, neg_inf)
+        valid_bonus = self._policy_prior_bonus(
+            policy_prior,
+            candidate_x,
+            candidate_cost,
+            cache=cache,
+        ).masked_fill(~valid_mask, neg_inf)
+
+        upper_index = torch.topk(valid_upper, k=probe_size).indices
+        bonus_index = torch.topk(valid_bonus, k=probe_size).indices
+        shortlisted = torch.unique(torch.cat([upper_index, bonus_index], dim=0))
+        if shortlisted.numel() > shortlist_size:
+            combined = valid_upper[shortlisted]
+            finite_bonus = torch.clamp(valid_bonus[shortlisted], min=0.0)
+            if torch.any(finite_bonus > 0.0):
+                finite_bonus = finite_bonus / torch.clamp(
+                    finite_bonus.max(),
+                    min=self.config.ratio_epsilon,
+                )
+                combined = combined + self.config.ppo_policy_weight * finite_bonus
+            keep = torch.topk(combined, k=shortlist_size).indices
+            shortlisted = shortlisted[keep]
+
+        screened = upper_bounds.new_full(upper_bounds.shape, float("-inf"))
+        screened[shortlisted] = upper_bounds[shortlisted]
+        screened[cache.selected_mask] = float("-inf")
+        self._last_policy_stats["policy_screened_candidates"] = float(shortlisted.numel())
+        return screened
+
+    def _current_upper_bounds(
+        self,
+        candidate_x: Tensor,
+        candidate_cost: Tensor,
+        candidate_variance: Tensor,
+        *,
+        cache: LazyGreedyCache,
+        availability: Tensor | None = None,
+        candidate_context: Tensor | None = None,
+    ) -> Tensor:
+        """Recompute cached upper bounds under the current selection state."""
+        conditional_variance = torch.clamp(
+            candidate_variance * torch.exp(cache.log_conditional_variance_factor),
+            min=self.config.variance_floor,
+        )
+        novelty = 1.0 - torch.clamp(cache.max_similarity, min=0.0, max=1.0)
+        route_distance = (
+            self._route_distance_vector(candidate_x, cache)
+            if self.config.route_distance_weight > 0.0
+            else None
+        )
+        upper_bounds = self.score_candidate(
+            candidate_variance,
+            candidate_cost,
+            availability=availability,
+            conditional_variance=conditional_variance,
+            novelty=novelty,
+            context_features=candidate_context,
+            route_distance=route_distance,
+        )
+        upper_bounds = upper_bounds.clone()
+        upper_bounds[cache.selected_mask] = float("-inf")
+        return upper_bounds
+
     def score_candidate(
         self,
         variance: Tensor,
@@ -777,6 +934,7 @@ class LazyGreedyOptimizer:
         conditional_variance: Tensor | None = None,
         novelty: Tensor | None = None,
         context_features: Tensor | None = None,
+        route_distance: Tensor | None = None,
     ) -> Tensor:
         """Score a candidate using a scalable approximate information surrogate."""
         variance = torch.clamp(variance, min=self.config.variance_floor)
@@ -790,11 +948,14 @@ class LazyGreedyOptimizer:
             novelty=novelty,
             context_features=context_features,
         )
+        effective_cost = self._effective_operational_cost(cost, route_distance=route_distance)
 
         if self.config.selection_mode == "penalized":
-            return base_gain - self.config.cost_weight * cost
+            return base_gain - self.config.cost_weight * effective_cost
         if self.config.selection_mode == "ratio":
-            return base_gain / torch.clamp(cost, min=self.config.ratio_epsilon)
+            return base_gain / effective_cost
+        if route_distance is not None and self.config.route_distance_weight > 0.0:
+            return base_gain - self.config.route_distance_weight * route_distance
         return base_gain
 
     def marginal_gain(
@@ -804,6 +965,7 @@ class LazyGreedyOptimizer:
         candidate_cost: Tensor,
         cache: LazyGreedyCache,
         *,
+        candidate_x: Tensor | None = None,
         availability: Tensor | None = None,
         context_features: Tensor | None = None,
     ) -> Tensor:
@@ -813,14 +975,51 @@ class LazyGreedyOptimizer:
             min=self.config.variance_floor,
         )
         novelty = 1.0 - torch.clamp(cache.max_similarity[index], min=0.0, max=1.0)
-        return self.score_candidate(
+        route_distance = self._route_distance_for_candidate(index, candidate_x, cache)
+        gain = self.score_candidate(
             candidate_variance[index],
             candidate_cost[index],
             availability=None if availability is None else availability[index],
             conditional_variance=conditional_variance,
             novelty=novelty,
             context_features=None if context_features is None else context_features[index],
+            route_distance=route_distance,
         )
+        return gain
+
+    def _routing_cost(self, selected_x: Tensor) -> float:
+        """Compute ordered routing cost over selected physical coordinates."""
+        if selected_x.shape[0] <= 1:
+            return 0.0
+        distance_dims = self._resolve_distance_dims(selected_x.shape[-1])
+        diffs = selected_x[1:, distance_dims] - selected_x[:-1, distance_dims]
+        return float(torch.sqrt(torch.clamp(diffs.pow(2).sum(dim=-1), min=1e-6)).sum().item())
+
+    def _optimize_route_order(self, selected_x: Tensor) -> Tensor:
+        """Reorder selected points using a nearest-neighbor route heuristic."""
+        if selected_x.shape[0] <= 2:
+            return torch.arange(selected_x.shape[0], device=selected_x.device, dtype=torch.long)
+        distance_dims = self._resolve_distance_dims(selected_x.shape[-1])
+        points = selected_x[:, distance_dims]
+        pairwise = torch.cdist(points, points, p=2)
+        best_order = torch.arange(selected_x.shape[0], device=selected_x.device, dtype=torch.long)
+        best_cost = float("inf")
+        for start in range(selected_x.shape[0]):
+            remaining = set(range(selected_x.shape[0]))
+            remaining.remove(start)
+            order = [start]
+            current = start
+            while remaining:
+                next_index = min(remaining, key=lambda idx: float(pairwise[current, idx].item()))
+                order.append(next_index)
+                remaining.remove(next_index)
+                current = next_index
+            order_tensor = torch.tensor(order, device=selected_x.device, dtype=torch.long)
+            route_cost = self._routing_cost(selected_x[order_tensor])
+            if route_cost < best_cost:
+                best_cost = route_cost
+                best_order = order_tensor
+        return best_order
 
     def update_cache(
         self,
@@ -920,12 +1119,13 @@ class LazyGreedyOptimizer:
                 selected_index=index,
             )
 
-        upper_bounds = self.score_candidate(
-            candidate_variance,
+        upper_bounds = self._current_upper_bounds(
+            candidate_x,
             candidate_cost,
+            candidate_variance,
+            cache=cache,
             availability=availability,
-            conditional_variance=candidate_variance,
-            context_features=candidate_context,
+            candidate_context=candidate_context,
         )
         policy_prior: Tensor | None = None
         if self.config.planning_strategy in {"ppo_warmstart", "ppo_online"}:
@@ -957,7 +1157,22 @@ class LazyGreedyOptimizer:
                 cache=cache if self.config.planning_strategy == "ppo_online" else None,
                 active_budget=active_budget if self.config.planning_strategy == "ppo_online" else None,
             )
-            upper_bounds = upper_bounds + self.config.ppo_policy_weight * policy_prior
+            upper_bounds = self._current_upper_bounds(
+                candidate_x,
+                candidate_cost,
+                candidate_variance,
+                cache=cache,
+                availability=availability,
+                candidate_context=candidate_context,
+            )
+            upper_bounds = self._screen_with_policy_prior(
+                upper_bounds,
+                policy_prior,
+                candidate_x,
+                candidate_cost,
+                cache=cache,
+                active_limit=active_limit,
+            )
         else:
             self._last_policy_stats = {}
         heap: list[tuple[float, int, int]] = []
@@ -985,12 +1200,11 @@ class LazyGreedyOptimizer:
                     candidate_variance=candidate_variance,
                     candidate_cost=candidate_cost,
                     availability=availability,
+                    candidate_x=candidate_x,
                     context_features=candidate_context,
                     cache=cache,
                 ).item()
             )
-            if policy_prior is not None:
-                exact_gain += float(self.config.ppo_policy_weight * policy_prior[index].item())
             next_upper = -heap[0][0] if heap else float("-inf")
 
             if exact_gain <= 0.0 and (evaluated_round == current_round or exact_gain >= next_upper):
@@ -1016,6 +1230,27 @@ class LazyGreedyOptimizer:
                         cache=cache,
                         active_budget=active_budget,
                     )
+                upper_bounds = self._current_upper_bounds(
+                    candidate_x,
+                    candidate_cost,
+                    candidate_variance,
+                    cache=cache,
+                    availability=availability,
+                    candidate_context=candidate_context,
+                )
+                upper_bounds = self._screen_with_policy_prior(
+                    upper_bounds,
+                    policy_prior,
+                    candidate_x,
+                    candidate_cost,
+                    cache=cache,
+                    active_limit=active_limit,
+                )
+                heap = []
+                for next_index, bound in enumerate(upper_bounds.tolist()):
+                    if cache.selected_mask[next_index]:
+                        continue
+                    heapq.heappush(heap, (-bound, next_index, current_round))
                 current_round += 1
                 continue
 
@@ -1023,12 +1258,20 @@ class LazyGreedyOptimizer:
 
         selected_tensor = torch.tensor(selected, device=candidate_x.device, dtype=torch.long)
         selected_x = candidate_x[selected_tensor] if selected else candidate_x.new_zeros((0, candidate_x.shape[-1]))
+        if selected:
+            route_order = self._optimize_route_order(selected_x)
+            selected_tensor = selected_tensor[route_order]
+            selected_x = selected_x[route_order]
+            selected = selected_tensor.tolist()
         utility_tensor = torch.tensor(utility_trace, device=candidate_x.device, dtype=candidate_x.dtype)
+        routing_cost = self._routing_cost(selected_x)
         return {
             "selected_indices": selected,
             "selected_x": selected_x,
             "utility_trace": utility_tensor,
             "total_cost": cache.current_cost,
+            "routing_cost": routing_cost,
+            "total_operational_cost": cache.current_cost + routing_cost,
             "planning_strategy": self.config.planning_strategy,
             "policy_stats": dict(self._last_policy_stats),
         }

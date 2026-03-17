@@ -55,6 +55,12 @@ function Write-Status {
     Add-Content -Path $script:LogPath -Value $line -Encoding UTF8
 }
 
+function Get-QuotaResetSleepSeconds {
+    $now = Get-Date
+    $tomorrow = $now.Date.AddDays(1)
+    return [int][Math]::Ceiling(($tomorrow - $now).TotalSeconds) + 300
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ResolvedOutputDir = Join-Path $RepoRoot $OutputDir
 $RawCsvPath = Join-Path $ResolvedOutputDir "aws_raw.csv"
@@ -108,6 +114,13 @@ while ($true) {
 
         Write-Status "Downloader exited cleanly but target end was not reached yet. Sleeping $RetryWaitSeconds seconds."
         Start-Sleep -Seconds $RetryWaitSeconds
+        continue
+    }
+
+    if ($exitCode -eq 75) {
+        $quotaSleep = [Math]::Max((Get-QuotaResetSleepSeconds), $RetryWaitSeconds)
+        Write-Status "Downloader hit daily quota. Sleeping $quotaSleep seconds until the next retry window."
+        Start-Sleep -Seconds $quotaSleep
         continue
     }
 

@@ -102,6 +102,28 @@ class PolicyAndModelTests(unittest.TestCase):
             late_components["mask_probability"].item(),
         )
 
+    def test_fault_head_trains_and_scores_corrupted_signal_higher(self) -> None:
+        config = self.ObservationModelConfig(
+            use_pi_ssd=True,
+            use_dbn=True,
+            use_fault_head=True,
+            link_fit_steps=40,
+            fault_corruption_probability=0.3,
+            fault_self_supervised_weight=0.4,
+        )
+        model = self.DynamicObservationModel(config)
+        z_mean = self.torch.zeros(10)
+        z_var = self.torch.ones(10)
+        y_true = self.torch.linspace(0.0, 1.0, 10)
+
+        history = model.fit_observation_link(y_true, z_mean, z_var=z_var)
+        clean_probability = model.fault_probability(y_true, z_mean, z_var)
+        corrupted_probability = model.fault_probability(y_true + 4.0, z_mean, z_var)
+        self.assertIn("fault_self_supervised_loss", history)
+        self.assertGreater(len(history["fault_self_supervised_loss"]), 0)
+        self.assertEqual(tuple(clean_probability.shape), (10,))
+        self.assertGreater(corrupted_probability.mean().item(), clean_probability.mean().item())
+
     def test_missingness_probability_responds_to_dynamic_features(self) -> None:
         config = self.MissingMechanismConfig(
             context_dim=1,
@@ -224,6 +246,63 @@ class PolicyAndModelTests(unittest.TestCase):
         self.assertEqual(tuple(health["health_mean"].shape), (6, config.health_latent_dim))
         self.assertEqual(tuple(health["health_var"].shape), (6, config.health_latent_dim))
 
+    def test_joint_generative_missingness_returns_sampled_losses(self) -> None:
+        config = self.MissingMechanismConfig(
+            context_dim=1,
+            num_sensor_types=2,
+            num_sensor_groups=2,
+            include_s=True,
+            inference_strategy="joint_generative",
+            hidden_dim=16,
+            encoder_hidden_dim=16,
+            trunk_depth=2,
+            encoder_depth=2,
+            reconstruction_weight=0.5,
+            kl_weight=0.1,
+            generative_samples=3,
+            use_temporal_transition_prior=True,
+            transition_time_index=0,
+            transition_group_key="global",
+        )
+        model = self.MissingMechanism(config)
+
+        X = self.torch.linspace(0.0, 1.0, 6).unsqueeze(-1)
+        z_mean = self.torch.zeros(6)
+        z_var = self.torch.ones(6)
+        y = self.torch.tensor([0.0, 0.1, float("nan"), 1.2, 1.3, float("nan")], dtype=self.torch.float32)
+        target = self.torch.tensor([0, 0, 1, 0, 0, 1], dtype=self.torch.float32)
+        context = self.torch.linspace(0.0, 1.0, 6).unsqueeze(-1)
+        metadata = {
+            "sensor_type": self.torch.tensor([0, 0, 0, 1, 1, 1], dtype=self.torch.long),
+            "sensor_group": self.torch.tensor([0, 0, 1, 1, 0, 1], dtype=self.torch.long),
+        }
+
+        components = model.compute_loss_components(
+            target_missing=target,
+            z_mean=z_mean,
+            z_var=z_var,
+            y=y,
+            context=context,
+            sensor_metadata=metadata,
+            S=self.torch.tensor([0, 0, 1, 0, 0, 1], dtype=self.torch.float32),
+            X=X,
+        )
+        proba = model.predict_proba(
+            z_mean=z_mean,
+            z_var=z_var,
+            y=y,
+            context=context,
+            sensor_metadata=metadata,
+            S=self.torch.tensor([0, 0, 1, 0, 0, 1], dtype=self.torch.float32),
+            X=X,
+        )
+        self.assertIn("total_loss", components)
+        self.assertGreaterEqual(components["reconstruction_loss"].item(), 0.0)
+        self.assertGreaterEqual(components["kl_loss"].item(), 0.0)
+        self.assertGreaterEqual(components["transition_loss"].item(), 0.0)
+        self.assertTrue(self.torch.all(proba > 0.0))
+        self.assertTrue(self.torch.all(proba < 1.0))
+
     def test_mi_proxy_prefers_non_redundant_candidate(self) -> None:
         config = self.InformationPolicyConfig(
             utility_surrogate="mi_proxy",
@@ -340,6 +419,112 @@ class PolicyAndModelTests(unittest.TestCase):
         )
         similarity = optimizer._similarity_to_anchor(candidate_x, candidate_x[0])
         self.assertAlmostEqual(similarity[1].item(), 1.0, places=6)
+
+    def test_route_penalty_prefers_closer_follow_up_selection(self) -> None:
+        config = self.InformationPolicyConfig(
+            utility_surrogate="mi_proxy",
+            planning_strategy="lazy_greedy",
+            route_distance_weight=0.5,
+            lengthscale=1.0,
+        )
+        optimizer = self.LazyGreedyOptimizer(config)
+        candidate_x = self.torch.tensor(
+            [[0.0, 0.0], [0.2, 0.2], [5.0, 5.0]],
+            dtype=self.torch.float32,
+        )
+        candidate_var = self.torch.tensor([1.0, 1.0, 1.0], dtype=self.torch.float32)
+        candidate_cost = self.torch.ones(3)
+        cache = self.LazyGreedyCache(
+            max_similarity=self.torch.zeros(3),
+            log_conditional_variance_factor=self.torch.zeros(3),
+            selected_mask=self.torch.zeros(3, dtype=self.torch.bool),
+            current_cost=0.0,
+        )
+        optimizer.update_cache(cache, candidate_x, candidate_var, selected_index=0)
+        near_gain = optimizer.marginal_gain(1, candidate_var, candidate_cost, cache, candidate_x=candidate_x).item()
+        far_gain = optimizer.marginal_gain(2, candidate_var, candidate_cost, cache, candidate_x=candidate_x).item()
+        self.assertGreater(near_gain, far_gain)
+
+    def test_ratio_mode_uses_route_aware_operational_cost(self) -> None:
+        config = self.InformationPolicyConfig(
+            utility_surrogate="variance",
+            planning_strategy="lazy_greedy",
+            selection_mode="ratio",
+            route_distance_weight=1.0,
+            lengthscale=1.0,
+        )
+        optimizer = self.LazyGreedyOptimizer(config)
+        near_gain = optimizer.score_candidate(
+            self.torch.tensor([1.0]),
+            self.torch.tensor([1.0]),
+            conditional_variance=self.torch.tensor([1.0]),
+            route_distance=self.torch.tensor([1.0]),
+        ).item()
+        far_gain = optimizer.score_candidate(
+            self.torch.tensor([1.0]),
+            self.torch.tensor([1.0]),
+            conditional_variance=self.torch.tensor([1.0]),
+            route_distance=self.torch.tensor([5.0]),
+        ).item()
+        self.assertGreater(near_gain, far_gain)
+
+    def test_select_reorders_route_to_reduce_routing_cost(self) -> None:
+        config = self.InformationPolicyConfig(
+            utility_surrogate="variance",
+            planning_strategy="lazy_greedy",
+            selection_mode="budget",
+            route_distance_weight=0.0,
+            budget=10.0,
+        )
+        optimizer = self.LazyGreedyOptimizer(config)
+        candidate_x = self.torch.tensor(
+            [[0.0, 0.0], [10.0, 0.0], [1.0, 0.0]],
+            dtype=self.torch.float32,
+        )
+        candidate_var = self.torch.tensor([3.0, 2.0, 1.0], dtype=self.torch.float32)
+        candidate_cost = self.torch.ones(3)
+        selection = optimizer.select(candidate_x, candidate_cost, candidate_var, max_selections=3)
+        self.assertEqual(selection["selected_indices"], [0, 2, 1])
+        self.assertLess(selection["routing_cost"], 20.0)
+
+    def test_policy_prior_only_screens_large_candidate_pools(self) -> None:
+        config = self.InformationPolicyConfig(
+            utility_surrogate="variance",
+            planning_strategy="ppo_warmstart",
+            selection_mode="budget",
+            ppo_max_candidates=4,
+            ppo_policy_weight=0.25,
+        )
+        optimizer = self.LazyGreedyOptimizer(config)
+        candidate_x = self.torch.arange(20, dtype=self.torch.float32).view(10, 2)
+        candidate_var = self.torch.linspace(1.0, 2.0, steps=10)
+        candidate_cost = self.torch.ones(10)
+        cache = optimizer._initialize_cache(candidate_x)
+        upper_bounds = optimizer._current_upper_bounds(
+            candidate_x,
+            candidate_cost,
+            candidate_var,
+            cache=cache,
+        )
+        policy_prior = self.torch.linspace(0.1, 1.0, steps=10)
+        screened = optimizer._screen_with_policy_prior(
+            upper_bounds,
+            policy_prior,
+            candidate_x,
+            candidate_cost,
+            cache=cache,
+            active_limit=2,
+        )
+        finite_mask = self.torch.isfinite(screened)
+        self.assertEqual(int(finite_mask.sum().item()), 4)
+        self.assertTrue(
+            self.torch.allclose(
+                screened[finite_mask],
+                upper_bounds[finite_mask],
+                atol=1e-6,
+                rtol=1e-6,
+            )
+        )
 
 
 if __name__ == "__main__":

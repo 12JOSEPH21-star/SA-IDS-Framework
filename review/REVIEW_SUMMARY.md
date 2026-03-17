@@ -185,7 +185,7 @@ First-slice manuscript alignment already landed:
 
 - temporal and `temporal_nwp` diagnosis modes in `M2`
 - adaptive conformal updates in `M5`
-- `plug_in` versus `joint_variational` missingness inference in `M3`
+- `plug_in` versus `joint_variational` versus `joint_generative` missingness inference in `M3`, including station-level temporal transition priors for the generative path
 - sequential versus joint-ELBO sparse-GP training for coupled `M1+M3`
 - `lazy_greedy` versus `non_myopic_rollout` versus `ppo_warmstart` versus `ppo_online` policy planning in `M4`
 - PI-SSD-style diagnosis embeddings with corruption curriculum and latent-ODE-lite regularization, DBN-lite state inference, latent health-aware missingness, and iterative graph-aware CoRel-lite conformal updates

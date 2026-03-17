@@ -1,0 +1,54 @@
+{
+  "raw_benchmark_outputs": {
+    "large_joint": "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large\\summary.json",
+    "korea_noaa_medium": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium\\summary.json",
+    "taiwan_pilot": "C:\\Programming Prctice\\outputs\\benchmark_taiwan_q1_pilot\\summary.json",
+    "japan_medium": "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium\\summary.json",
+    "china_medium": "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium\\summary.json",
+    "us_medium": "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium\\summary.json",
+    "korea_noaa_q2_safe": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q2_safe\\summary.json",
+    "korea_noaa_q3_safe": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q3_safe\\summary.json"
+  },
+  "existing_summary_artifacts": {
+    "large_joint": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large\\report.md"
+    },
+    "korea_noaa_medium": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium\\report.md"
+    },
+    "taiwan_pilot": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_taiwan_q1_pilot\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_taiwan_q1_pilot\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_taiwan_q1_pilot\\report.md"
+    },
+    "japan_medium": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium\\report.md"
+    },
+    "china_medium": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium\\report.md"
+    },
+    "us_medium": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium\\report.md"
+    },
+    "korea_noaa_q2_safe": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q2_safe\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q2_safe\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q2_safe\\report.md"
+    },
+    "korea_noaa_q3_safe": {
+      "paper_tables": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q3_safe\\paper_tables.json",
+      "significance_summary": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q3_safe\\significance_summary.json",
+      "report_markdown": "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q3_safe\\report.md"
+    }
+  }
+}

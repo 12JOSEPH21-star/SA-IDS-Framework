@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from .research import load_config, run_study, write_template_project
@@ -9,6 +9,13 @@ from .research import load_config, run_study, write_template_project
 
 def _iso_date(value: str) -> date:
     return date.fromisoformat(value)
+
+
+def _iso_datetime(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return datetime.strptime(value, "%Y%m%d%H%M")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +88,101 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("framework_config.json"),
         help="Path to the framework JSON config file.",
+    )
+
+    framework_detached_parser = subparsers.add_parser(
+        "framework-run-detached",
+        help="Launch the framework run as a detached background process.",
+    )
+    framework_detached_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("framework_config.json"),
+        help="Path to the framework JSON config file.",
+    )
+    framework_detached_parser.add_argument(
+        "--python",
+        type=Path,
+        default=None,
+        help="Optional Python executable override for the detached worker.",
+    )
+
+    framework_status_parser = subparsers.add_parser(
+        "framework-run-status",
+        help="Read the latest persisted framework-run progress for one config.",
+    )
+    framework_status_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("framework_config.json"),
+        help="Path to the framework JSON config file.",
+    )
+
+    benchmark_init_parser = subparsers.add_parser(
+        "benchmark-init",
+        help="Create a fixed benchmark-suite config for paper-ready experiments.",
+    )
+    benchmark_init_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("benchmark_config.json"),
+        help="Where to write the benchmark JSON config.",
+    )
+    benchmark_init_parser.add_argument(
+        "--framework-config",
+        type=Path,
+        default=None,
+        help="Optional base framework config. Defaults to the best real-data config in the repo.",
+    )
+    benchmark_init_parser.add_argument(
+        "--preset",
+        default="small",
+        choices=("small", "medium", "large"),
+        help="Benchmark scale preset to write.",
+    )
+    benchmark_init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the target config if it already exists.",
+    )
+
+    benchmark_run_parser = subparsers.add_parser(
+        "benchmark-run",
+        help="Run the fixed benchmark suite from a benchmark config.",
+    )
+    benchmark_run_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("benchmark_config.json"),
+        help="Path to the benchmark JSON config file.",
+    )
+
+    benchmark_run_detached_parser = subparsers.add_parser(
+        "benchmark-run-detached",
+        help="Launch one benchmark suite run in a detached subprocess.",
+    )
+    benchmark_run_detached_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("benchmark_config.json"),
+        help="Path to the benchmark JSON config file.",
+    )
+    benchmark_run_detached_parser.add_argument(
+        "--python",
+        type=Path,
+        default=None,
+        help="Optional Python executable used for the detached benchmark run.",
+    )
+
+    benchmark_status_parser = subparsers.add_parser(
+        "benchmark-run-status",
+        help="Read the latest persisted benchmark status for one config.",
+    )
+    benchmark_status_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("benchmark_config.json"),
+        help="Path to the benchmark JSON config file.",
     )
 
     era5_parser = subparsers.add_parser(
@@ -213,7 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     kma_parser.add_argument(
         "--source",
         required=True,
-        choices=("asos_hourly", "aws_recent_1min"),
+        choices=("asos_hourly", "asos_hourly_apihub", "aws_recent_1min"),
         help="Official KMA source to download.",
     )
     kma_parser.add_argument(
@@ -260,7 +362,10 @@ def build_parser() -> argparse.ArgumentParser:
     kma_parser.add_argument(
         "--service-key",
         default=None,
-        help="Optional source credential. Uses DATA_GO_KR_SERVICE_KEY for ASOS or KMA_APIHUB_AUTH_KEY for AWS when omitted.",
+        help=(
+            "Optional source credential. Uses DATA_GO_KR_SERVICE_KEY for asos_hourly and "
+            "KMA_APIHUB_AUTH_KEY for asos_hourly_apihub or aws_recent_1min when omitted."
+        ),
     )
     kma_parser.add_argument(
         "--station-ids",
@@ -328,6 +433,219 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Write only the manifest and optional metadata template.",
+    )
+
+    kma_nwp_parser = subparsers.add_parser(
+        "kma-nwp-download",
+        help="Download KMA NWP anchor payloads such as LDAPS or RDAPS products.",
+    )
+    kma_nwp_parser.add_argument(
+        "--source",
+        required=True,
+        choices=("ldaps_unis_all", "rdaps_unis_all", "nwp_latlon_grid"),
+        help="Official KMA NWP source to download.",
+    )
+    kma_nwp_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/kma_nwp"),
+        help="Directory for manifests, raw payloads, and parsed outputs.",
+    )
+    kma_nwp_parser.add_argument(
+        "--start-base-time",
+        type=_iso_datetime,
+        required=True,
+        help="Inclusive base time in YYYY-MM-DDTHH:MM or YYYYMMDDHHMM format.",
+    )
+    kma_nwp_parser.add_argument(
+        "--end-base-time",
+        type=_iso_datetime,
+        required=True,
+        help="Inclusive end base time in YYYY-MM-DDTHH:MM or YYYYMMDDHHMM format.",
+    )
+    kma_nwp_parser.add_argument(
+        "--data-type-code",
+        default="Temp",
+        help="KMA NWP variable code, for example Temp.",
+    )
+    kma_nwp_parser.add_argument(
+        "--lead-hours",
+        nargs="+",
+        type=int,
+        default=[0, 6, 12],
+        help="Lead hours to request for typ02 NWP products.",
+    )
+    kma_nwp_parser.add_argument(
+        "--base-interval-hours",
+        type=int,
+        default=6,
+        help="Step between requested base times in hours.",
+    )
+    kma_nwp_parser.add_argument(
+        "--service-key",
+        default=None,
+        help="Optional KMA API Hub authKey. Uses KMA_APIHUB_AUTH_KEY when omitted.",
+    )
+    kma_nwp_parser.add_argument(
+        "--raw-dir",
+        type=Path,
+        default=None,
+        help="Optional raw payload directory. Defaults to <output-dir>/raw.",
+    )
+    kma_nwp_parser.add_argument(
+        "--summary-csv",
+        type=Path,
+        default=None,
+        help="Optional request summary CSV output path.",
+    )
+    kma_nwp_parser.add_argument(
+        "--grid-csv",
+        type=Path,
+        default=None,
+        help="Optional coordinate-grid CSV output path for nwp_latlon_grid.",
+    )
+    kma_nwp_parser.add_argument(
+        "--data-type",
+        choices=("JSON", "XML"),
+        default="JSON",
+        help="Response format for typ02 NWP requests.",
+    )
+    kma_nwp_parser.add_argument(
+        "--num-rows",
+        type=int,
+        default=1000,
+        help="Page size for typ02 requests.",
+    )
+    kma_nwp_parser.add_argument(
+        "--nwp-code",
+        default="u015",
+        help="Grid code for nwp_latlon_grid, for example u015 or u120.",
+    )
+    kma_nwp_parser.add_argument(
+        "--coordinate-types",
+        nargs="+",
+        default=["lon", "lat"],
+        help="Coordinate types for nwp_latlon_grid. Use lon and/or lat.",
+    )
+    kma_nwp_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="HTTP timeout in seconds.",
+    )
+    kma_nwp_parser.add_argument(
+        "--retries",
+        type=int,
+        default=2,
+        help="Retry budget per request.",
+    )
+    kma_nwp_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing outputs.",
+    )
+    kma_nwp_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write only the manifest without downloading payloads.",
+    )
+
+    kma_event_parser = subparsers.add_parser(
+        "kma-event-download",
+        help="Download KMA warning/event records for event-truth analysis.",
+    )
+    kma_event_parser.add_argument(
+        "--source",
+        required=True,
+        choices=("warning_history", "warning_information", "warning_now_snapshot"),
+        help="Official KMA event source to download.",
+    )
+    kma_event_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/kma_event"),
+        help="Directory for manifests and CSV outputs.",
+    )
+    kma_event_parser.add_argument(
+        "--start-datetime",
+        type=_iso_datetime,
+        required=True,
+        help="Inclusive event window start in YYYY-MM-DDTHH:MM or YYYYMMDDHHMM format.",
+    )
+    kma_event_parser.add_argument(
+        "--end-datetime",
+        type=_iso_datetime,
+        required=True,
+        help="Inclusive event window end in YYYY-MM-DDTHH:MM or YYYYMMDDHHMM format.",
+    )
+    kma_event_parser.add_argument(
+        "--raw-csv",
+        type=Path,
+        default=None,
+        help="Optional raw merged CSV output path.",
+    )
+    kma_event_parser.add_argument(
+        "--standardized-csv",
+        type=Path,
+        default=None,
+        help="Optional normalized event CSV output path.",
+    )
+    kma_event_parser.add_argument(
+        "--service-key",
+        default=None,
+        help="Optional KMA API Hub authKey. Uses KMA_APIHUB_AUTH_KEY when omitted.",
+    )
+    kma_event_parser.add_argument(
+        "--warning-codes",
+        nargs="*",
+        default=(),
+        help="Optional warning codes such as R, T, W, or H.",
+    )
+    kma_event_parser.add_argument(
+        "--region-codes",
+        nargs="*",
+        default=(),
+        help="Optional KMA region ids.",
+    )
+    kma_event_parser.add_argument(
+        "--basis",
+        choices=("f", "e"),
+        default="f",
+        help="Publication-time or effective-time basis for warning_now_snapshot.",
+    )
+    kma_event_parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=60,
+        help="Snapshot interval in minutes for warning_now_snapshot.",
+    )
+    kma_event_parser.add_argument(
+        "--disp",
+        type=int,
+        default=0,
+        help="KMA display level parameter.",
+    )
+    kma_event_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="HTTP timeout in seconds.",
+    )
+    kma_event_parser.add_argument(
+        "--retries",
+        type=int,
+        default=2,
+        help="Retry budget per request.",
+    )
+    kma_event_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing outputs.",
+    )
+    kma_event_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write only the manifest without downloading payloads.",
     )
 
     noaa_parser = subparsers.add_parser(
@@ -433,10 +751,64 @@ def build_parser() -> argparse.ArgumentParser:
         help="Framework-ready NOAA ISD CSV path.",
     )
     joint_parser.add_argument(
+        "--asos-csv",
+        type=Path,
+        default=None,
+        help="Optional framework-ready ASOS CSV path.",
+    )
+    joint_parser.add_argument(
         "--era5-csv",
         type=Path,
         default=None,
         help="Optional ERA5 reference CSV path used for enrichment.",
+    )
+    joint_parser.add_argument(
+        "--event-history-csv",
+        type=Path,
+        default=None,
+        help="Optional standardized KMA warning-history CSV path.",
+    )
+    joint_parser.add_argument(
+        "--event-information-csv",
+        type=Path,
+        default=None,
+        help="Optional standardized KMA warning-information CSV path.",
+    )
+    joint_parser.add_argument(
+        "--event-station-csv",
+        type=Path,
+        default=None,
+        help="Optional station-local event sidecar CSV path.",
+    )
+    joint_parser.add_argument(
+        "--qc-metadata-csv",
+        type=Path,
+        default=None,
+        help="Optional station-level QC or operational-summary CSV path.",
+    )
+    joint_parser.add_argument(
+        "--nwp-ldaps-summary-csv",
+        type=Path,
+        default=None,
+        help="Optional LDAPS summary CSV used for actual NWP anchor enrichment.",
+    )
+    joint_parser.add_argument(
+        "--nwp-rdaps-summary-csv",
+        type=Path,
+        default=None,
+        help="Optional RDAPS summary CSV used for actual NWP anchor enrichment.",
+    )
+    joint_parser.add_argument(
+        "--nwp-ldaps-grid-csv",
+        type=Path,
+        default=None,
+        help="Optional LDAPS grid CSV produced by kma-nwp-download --source nwp_latlon_grid.",
+    )
+    joint_parser.add_argument(
+        "--nwp-rdaps-grid-csv",
+        type=Path,
+        default=None,
+        help="Optional RDAPS grid CSV produced by kma-nwp-download --source nwp_latlon_grid.",
     )
     joint_parser.add_argument(
         "--output-dir",
@@ -519,6 +891,117 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Selection: {artifacts.selection_path}")
             print(f"Report: {artifacts.report_path}")
             return 0
+        if args.command == "framework-run-detached":
+            from .framework import launch_framework_detached
+
+            launch = launch_framework_detached(args.config, python_executable=args.python)
+            print("Framework detached run launched.")
+            print(f"PID: {launch['pid']}")
+            print(f"Output: {launch['output_path']}")
+            print(f"Stdout: {launch['stdout_path']}")
+            print(f"Stderr: {launch['stderr_path']}")
+            print(f"Launch metadata: {Path(launch['output_path']).parent / 'framework_detached_launch.json'}")
+            return 0
+        if args.command == "framework-run-status":
+            from .framework import framework_run_status
+
+            status = framework_run_status(args.config)
+            progress = status.get("progress")
+            print(f"Output: {status['output_path']}")
+            print(f"Progress: {status['progress_path']}")
+            print(f"Checkpoint: {status['checkpoint_path']}")
+            print(f"Heartbeat: {status['heartbeat_path']}")
+            if progress is None:
+                print("Status: no persisted progress yet.")
+            else:
+                print(f"Status: {progress.get('status', '')}")
+                print(f"Stage: {progress.get('stage', '')}")
+                print(f"Updated: {progress.get('updated_at', '')}")
+                if progress.get("error"):
+                    print(f"Error: {progress['error']}")
+            heartbeat = status.get("last_heartbeat")
+            if isinstance(heartbeat, dict):
+                print(f"Heartbeat stage: {heartbeat.get('stage', '')}")
+                print(f"Heartbeat step: {heartbeat.get('step', '')}")
+                print(f"Heartbeat updated: {heartbeat.get('timestamp', '')}")
+            launch = status.get("launch")
+            if isinstance(launch, dict):
+                print(f"Last detached PID: {launch.get('pid', '')}")
+                print(f"Detached stdout: {launch.get('stdout_path', '')}")
+                print(f"Detached stderr: {launch.get('stderr_path', '')}")
+            return 0
+        if args.command == "benchmark-init":
+            from benchmark_suite import write_benchmark_template
+
+            config_path = write_benchmark_template(
+                args.config,
+                framework_config_path=args.framework_config,
+                preset=args.preset,
+                force=args.force,
+            )
+            print(f"Created benchmark config: {config_path}")
+            print(f"Next: python -m task_cli benchmark-run --config {config_path}")
+            return 0
+        if args.command == "benchmark-run":
+            from benchmark_suite import run_benchmark
+
+            artifacts = run_benchmark(args.config)
+            print(f"Benchmark suite finished: {artifacts.summary_path.parent}")
+            print(f"Summary: {artifacts.summary_path}")
+            print(f"Predictive MNAR: {artifacts.predictive_path}")
+            print(f"Fault diagnosis: {artifacts.fault_path}")
+            print(f"Reliability: {artifacts.reliability_path}")
+            print(f"Coverage over time: {artifacts.coverage_timeseries_path}")
+            print(f"Ablation: {artifacts.ablation_path}")
+            print(f"Policy: {artifacts.policy_path}")
+            print(f"Runtime: {artifacts.runtime_path}")
+            print(f"Paper tables: {artifacts.paper_tables_path}")
+            print(f"Report: {artifacts.report_path}")
+            return 0
+        if args.command == "benchmark-run-detached":
+            from benchmark_suite import launch_benchmark_detached
+
+            launch = launch_benchmark_detached(args.config, python_executable=args.python)
+            print("Benchmark detached run launched.")
+            print(f"PID: {launch['pid']}")
+            print(f"Output dir: {launch['output_dir']}")
+            print(f"Stdout: {launch['stdout_path']}")
+            print(f"Stderr: {launch['stderr_path']}")
+            print(f"Launch metadata: {Path(launch['output_dir']) / 'benchmark_detached_launch.json'}")
+            return 0
+        if args.command == "benchmark-run-status":
+            from benchmark_suite import benchmark_run_status
+
+            status = benchmark_run_status(args.config)
+            print(f"Output dir: {status['output_dir']}")
+            print(f"Summary: {status['summary_path']}")
+            print(f"Runtime: {status['runtime_path']}")
+            print(f"Progress: {status['progress_path']}")
+            print(f"Heartbeat: {status['heartbeat_path']}")
+            launch = status.get("launch")
+            if isinstance(launch, dict):
+                print(f"Last detached PID: {launch.get('pid', '')}")
+                print(f"Detached stdout: {launch.get('stdout_path', '')}")
+                print(f"Detached stderr: {launch.get('stderr_path', '')}")
+            progress = status.get("progress")
+            if isinstance(progress, dict):
+                print(f"Status: {progress.get('status', '')}")
+                print(f"Stage: {progress.get('stage', '')}")
+                print(f"Updated: {progress.get('updated_at', '')}")
+                if progress.get("repeat_seed") is not None:
+                    print(f"Repeat seed: {progress.get('repeat_seed', '')}")
+            heartbeat = status.get("last_heartbeat")
+            if isinstance(heartbeat, dict):
+                print(f"Last heartbeat: {heartbeat.get('timestamp', '')}")
+                print(f"Heartbeat stage: {heartbeat.get('stage', '')}")
+                print(f"Heartbeat step: {heartbeat.get('step', '')}")
+            summary = status.get("summary")
+            if isinstance(summary, dict):
+                setup = summary.get("canonical_setup")
+                if isinstance(setup, dict):
+                    print(f"Stations: {setup.get('station_count', '')}")
+                    print(f"Repeat seeds: {setup.get('repeat_seeds', '')}")
+            return 0
         if args.command == "era5-download":
             from .era5 import Era5DownloadConfig, download_era5
 
@@ -559,8 +1042,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Framework config: {artifacts.framework_config_path}")
             return 0
         if args.command == "kma-download":
-            from datetime import datetime
-
             from .kma import KmaDownloadConfig, download_kma
 
             aws_datetime = None
@@ -610,6 +1091,77 @@ def main(argv: list[str] | None = None) -> int:
             if artifacts.metadata_template_path is not None:
                 print(f"Metadata template: {artifacts.metadata_template_path}")
             return 0
+        if args.command == "kma-nwp-download":
+            from .kma_nwp import KmaNwpDownloadConfig, download_kma_nwp
+
+            artifacts = download_kma_nwp(
+                KmaNwpDownloadConfig(
+                    source=str(args.source),
+                    output_dir=args.output_dir,
+                    start_base_time=args.start_base_time,
+                    end_base_time=args.end_base_time,
+                    data_type_code=str(args.data_type_code),
+                    lead_hours=tuple(int(value) for value in args.lead_hours),
+                    base_interval_hours=int(args.base_interval_hours),
+                    service_key=args.service_key,
+                    raw_dir=args.raw_dir,
+                    summary_csv_path=args.summary_csv,
+                    grid_csv_path=args.grid_csv,
+                    data_type=str(args.data_type),
+                    num_rows=int(args.num_rows),
+                    nwp_code=str(args.nwp_code),
+                    coordinate_types=tuple(str(value) for value in args.coordinate_types),
+                    overwrite=bool(args.overwrite),
+                    dry_run=bool(args.dry_run),
+                    timeout=int(args.timeout),
+                    max_retries=int(args.retries),
+                )
+            )
+            if artifacts.dry_run:
+                print(f"Planned KMA NWP {args.source} download in {artifacts.output_dir}")
+            else:
+                print(f"Downloaded {artifacts.row_count} KMA NWP summary row(s) into {artifacts.output_dir}")
+            print(f"Manifest: {artifacts.manifest_path}")
+            if artifacts.raw_dir is not None:
+                print(f"Raw dir: {artifacts.raw_dir}")
+            if artifacts.summary_csv_path is not None:
+                print(f"Summary CSV: {artifacts.summary_csv_path}")
+            if artifacts.grid_csv_path is not None:
+                print(f"Grid CSV: {artifacts.grid_csv_path}")
+            return 0
+        if args.command == "kma-event-download":
+            from .kma_event import KmaEventDownloadConfig, download_kma_events
+
+            artifacts = download_kma_events(
+                KmaEventDownloadConfig(
+                    source=str(args.source),
+                    output_dir=args.output_dir,
+                    start_datetime=args.start_datetime,
+                    end_datetime=args.end_datetime,
+                    raw_csv_path=args.raw_csv,
+                    standardized_csv_path=args.standardized_csv,
+                    service_key=args.service_key,
+                    warning_codes=tuple(str(value) for value in args.warning_codes),
+                    region_codes=tuple(str(value) for value in args.region_codes),
+                    basis=str(args.basis),
+                    interval_minutes=int(args.interval_minutes),
+                    disp=int(args.disp),
+                    overwrite=bool(args.overwrite),
+                    dry_run=bool(args.dry_run),
+                    timeout=int(args.timeout),
+                    max_retries=int(args.retries),
+                )
+            )
+            if artifacts.dry_run:
+                print(f"Planned KMA event {args.source} download in {artifacts.output_dir}")
+            else:
+                print(f"Downloaded {artifacts.row_count} KMA event row(s) into {artifacts.output_dir}")
+            print(f"Manifest: {artifacts.manifest_path}")
+            if artifacts.raw_csv_path is not None:
+                print(f"Raw CSV: {artifacts.raw_csv_path}")
+            if artifacts.standardized_csv_path is not None:
+                print(f"Standardized CSV: {artifacts.standardized_csv_path}")
+            return 0
         if args.command == "noaa-download":
             from .noaa import NoaaDownloadConfig, download_noaa_isd
 
@@ -654,7 +1206,16 @@ def main(argv: list[str] | None = None) -> int:
                 JointBuildConfig(
                     aws_csv_path=args.aws_csv,
                     noaa_csv_path=args.noaa_csv,
+                    asos_csv_path=args.asos_csv,
                     era5_csv_path=args.era5_csv,
+                    event_history_csv_path=args.event_history_csv,
+                    event_information_csv_path=args.event_information_csv,
+                    event_station_csv_path=args.event_station_csv,
+                    qc_metadata_csv_path=args.qc_metadata_csv,
+                    nwp_ldaps_summary_csv_path=args.nwp_ldaps_summary_csv,
+                    nwp_rdaps_summary_csv_path=args.nwp_rdaps_summary_csv,
+                    nwp_ldaps_grid_csv_path=args.nwp_ldaps_grid_csv,
+                    nwp_rdaps_grid_csv_path=args.nwp_rdaps_grid_csv,
                     output_dir=args.output_dir,
                     output_csv_path=args.output_csv,
                     framework_config_path=args.framework_config,

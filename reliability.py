@@ -32,6 +32,7 @@ class ConformalConfig:
     graph_score_weight: float = 0.5
     graph_covariance_weight: float = 0.5
     graph_message_passing_steps: int = 2
+    graph_min_quantile_factor: float = 0.8
 
     def __post_init__(self) -> None:
         if not 0.0 < self.epsilon < 1.0:
@@ -74,6 +75,8 @@ class ConformalConfig:
             raise ValueError("graph_covariance_weight must lie in [0, 1].")
         if self.graph_message_passing_steps < 0:
             raise ValueError("graph_message_passing_steps must be non-negative.")
+        if not 0.0 <= self.graph_min_quantile_factor <= 1.0:
+            raise ValueError("graph_min_quantile_factor must lie in [0, 1].")
 
 
 @dataclass
@@ -349,7 +352,9 @@ class ConformalPredictor:
         self._graph_adapter.eval()
         with torch.no_grad():
             local_quantile = self._graph_adapter(graph_features)
-        return (1.0 - self.config.graph_score_weight) * base_quantile + self.config.graph_score_weight * local_quantile
+        blended = (1.0 - self.config.graph_score_weight) * base_quantile + self.config.graph_score_weight * local_quantile
+        minimum_quantile = self.config.graph_min_quantile_factor * base_quantile
+        return torch.maximum(blended, minimum_quantile.expand_as(blended))
 
     def _relational_neighbor_error(self, node_feature: Tensor | None) -> float | None:
         """Estimate neighbor error from stored relational memory."""
@@ -398,8 +403,10 @@ class ConformalPredictor:
             )
             weight = self.config.relational_neighbor_weight
             blended_error = (1.0 - weight) * error_value + weight * neighbor_value
+        # When realized miscoverage exceeds the target epsilon, shrink epsilon so
+        # future conformal quantiles widen rather than collapse.
         updated = self._adaptive_epsilon + self.config.adaptation_rate * (
-            blended_error - self._adaptive_epsilon
+            self.config.epsilon - blended_error
         )
         self._adaptive_epsilon = max(self.config.min_epsilon, min(self.config.max_epsilon, updated))
         return self._adaptive_epsilon

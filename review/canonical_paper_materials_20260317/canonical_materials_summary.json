@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-03-17T11:29:38+00:00",
+  "commit_hash": "1a2a07695c53adf3fbb798818d9935e58e70517c",
+  "aggregation_rule_path": "C:\\Programming Prctice\\review\\canonical_paper_materials_20260317\\canonical_aggregation_rule.json",
+  "files": [
+    "prediction_large_joint_table.csv",
+    "prediction_large_joint_claim_table.csv",
+    "reliability_large_joint_table.csv",
+    "ablation_large_joint_table.csv",
+    "region_holdout_large_joint_table.csv",
+    "external_pilots_table.csv",
+    "significance_summary_table.csv"
+  ]
+}

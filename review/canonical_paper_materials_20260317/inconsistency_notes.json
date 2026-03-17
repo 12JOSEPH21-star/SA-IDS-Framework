@@ -1,0 +1,12 @@
+[
+  {
+    "artifact": "C:\\Programming Prctice\\review\\NMI_BENCHMARK_COMPARISON_20260317.json",
+    "issue": "Existing comparison file mixes best single rows and grouped means. Superseded by canonical tables."
+  },
+  {
+    "artifact": "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large\\significance_summary.json",
+    "issue": "Existing predictive/reliability significance outputs are empty because baseline names did not match raw summary variants.",
+    "predictive_baseline_expected": "gp_only",
+    "reliability_baseline_expected": "split_conformal"
+  }
+]

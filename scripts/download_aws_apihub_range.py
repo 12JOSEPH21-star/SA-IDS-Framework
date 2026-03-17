@@ -41,6 +41,10 @@ RAW_HEADER = (
 )
 
 
+class DailyQuotaExceededError(RuntimeError):
+    """Raised when the KMA API Hub daily quota has been exhausted."""
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download AWS API Hub range data into framework-ready CSV files.")
     parser.add_argument("--start", required=True, help="Inclusive start timestamp in YYYY-MM-DDTHH:MM format.")
@@ -94,6 +98,9 @@ def fetch_text(url: str, timeout: int, max_retries: int) -> str:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.read().decode("utf-8", errors="ignore").replace("\ufeff", "")
         except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="ignore")
+            if error.code == 403 and "일일 최대 호출 건수 제한" in body:
+                raise DailyQuotaExceededError("KMA API Hub daily quota exceeded.") from error
             if attempts >= max_retries:
                 raise
             attempts += 1
@@ -320,7 +327,15 @@ def main() -> int:
                 },
                 args.auth_key,
             )
-            text = fetch_text(url, args.timeout, args.max_retries)
+            try:
+                text = fetch_text(url, args.timeout, args.max_retries)
+            except DailyQuotaExceededError:
+                print(
+                    f"Daily quota exceeded while requesting {chunk_start.isoformat(timespec='minutes')} "
+                    f"to {chunk_end.isoformat(timespec='minutes')}. Resume later.",
+                    file=sys.stderr,
+                )
+                return 75
             rows = parse_observation_lines(text)
             for row in rows:
                 raw_writer.writerow(row)

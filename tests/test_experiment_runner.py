@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
@@ -162,12 +164,103 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertTrue(artifacts.sensitivity_path.exists())
         self.assertTrue(artifacts.selection_path.exists())
         self.assertTrue(artifacts.report_path.exists())
+        self.assertTrue(artifacts.progress_path is not None and artifacts.progress_path.exists())
+        self.assertTrue(artifacts.checkpoint_path is not None and artifacts.checkpoint_path.exists())
+        heartbeat_path = artifacts.summary_path.parent / "framework_heartbeat.jsonl"
+        self.assertTrue(heartbeat_path.exists())
+        self.assertIn('"stage": "evaluating_base_pipeline"', heartbeat_path.read_text(encoding="utf-8"))
 
         report_text = artifacts.report_path.read_text(encoding="utf-8")
         self.assertIn("Silence-Aware IDS Framework Report", report_text)
         self.assertIn("## Runtime", report_text)
         self.assertIn("## Benchmark", report_text)
         self.assertIn("gp_plus_sensor_conditional_missingness", report_text)
+        progress_payload = json.loads(artifacts.progress_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+        self.assertEqual(progress_payload["status"], "completed")
+        self.assertEqual(progress_payload["stage"], "completed")
+
+    def test_write_artifacts_writes_partial_summary_on_failure(self) -> None:
+        runner = self._build_runner()
+        output_path = self.root / "outputs" / "summary.json"
+
+        with mock.patch.object(
+            runner,
+            "_run_ablation_suite_incremental",
+            side_effect=RuntimeError("forced ablation failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "forced ablation failure"):
+                runner.write_artifacts(output_path)
+
+        self.assertTrue(output_path.exists())
+        progress_path = output_path.parent / "framework_progress.json"
+        self.assertTrue(progress_path.exists())
+        summary_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        progress_payload = json.loads(progress_path.read_text(encoding="utf-8"))
+        self.assertEqual(summary_payload["status"], "failed")
+        self.assertEqual(progress_payload["status"], "failed")
+        self.assertIn("forced ablation failure", summary_payload["error"])
+
+    def test_write_artifacts_resumes_from_completed_checkpoint(self) -> None:
+        runner = self._build_runner()
+        output_path = self.root / "outputs" / "summary.json"
+        runner.write_artifacts(output_path)
+
+        resumed_runner = self._build_runner()
+        with mock.patch.object(resumed_runner, "run", side_effect=AssertionError("run() should not be called")):
+            artifacts = resumed_runner.write_artifacts(output_path)
+
+        self.assertTrue(artifacts.summary_path.exists())
+        progress_payload = json.loads((output_path.parent / "framework_progress.json").read_text(encoding="utf-8"))
+        self.assertEqual(progress_payload["status"], "completed")
+
+    def test_large_run_auto_caps_rows_and_stabilizes_reliability_mode(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        run_config = self.ExperimentRunConfig(
+            max_train_rows=4,
+            max_calibration_rows=2,
+            max_evaluation_rows=2,
+            auto_scale_large_runs=True,
+        )
+        runner = self.ResearchExperimentRunner(runner.data_config, runner.pipeline_config, run_config)
+        capped, row_caps = runner._maybe_cap_prepared_data(prepared)
+        resolved = runner._resolve_pipeline_config(capped)
+        stabilized = runner._stabilize_pipeline_config_for_large_runs(resolved, row_caps=row_caps)
+        self.assertTrue(row_caps["applied"])
+        self.assertEqual(int(capped.train.X.shape[0]), 4)
+        self.assertEqual(int(capped.calibration.X.shape[0]), 2)
+        self.assertEqual(int(capped.evaluation.X.shape[0]), 2)
+        self.assertEqual(stabilized.reliability.mode, "relational_adaptive")
+
+    def test_large_run_uses_evaluation_proxy_for_full_batch_residency(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        run_config = self.ExperimentRunConfig(
+            max_train_rows=4,
+            max_calibration_rows=2,
+            max_evaluation_rows=2,
+            use_evaluation_as_candidate_pool=True,
+        )
+        runner = self.ResearchExperimentRunner(runner.data_config, runner.pipeline_config, run_config)
+        capped, row_caps = runner._maybe_cap_prepared_data(prepared)
+        self.assertTrue(row_caps["applied"])
+        self.assertEqual(row_caps["retained_full_source"], "evaluation_proxy")
+        self.assertEqual(int(capped.full.X.shape[0]), int(capped.evaluation.X.shape[0]))
+
+    def test_run_with_checkpoint_uses_prepared_cache(self) -> None:
+        runner = self._build_runner()
+        output_path = self.root / "outputs" / "summary.json"
+        prepared = runner.prepare_data()
+        capped, row_caps = runner._maybe_cap_prepared_data(prepared)
+        cache_path = runner._prepared_cache_path(output_path)
+        runner._save_prepared_cache(cache_path, capped, row_caps)
+
+        with mock.patch.object(runner, "prepare_data", side_effect=AssertionError("prepare_data should not be called")):
+            result, progress_path, checkpoint_path = runner._run_with_checkpoint(output_path)
+
+        self.assertTrue(progress_path.exists())
+        self.assertTrue(checkpoint_path.exists())
+        self.assertIn("rmse", result.base_metrics)
 
 
 if __name__ == "__main__":

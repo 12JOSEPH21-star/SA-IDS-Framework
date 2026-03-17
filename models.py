@@ -43,6 +43,53 @@ def _to_log_variance(variance: Tensor, floor: float) -> Tensor:
     return torch.log(torch.clamp(variance, min=floor))
 
 
+def _probability_to_logit(probability: Tensor, floor: float) -> Tensor:
+    """Convert probabilities into stable logits."""
+    clipped = torch.clamp(probability, min=floor, max=1.0 - floor)
+    return torch.log(clipped) - torch.log1p(-clipped)
+
+
+def _diagonal_gaussian_samples(
+    mean: Tensor,
+    variance: Tensor,
+    *,
+    sample_count: int,
+    floor: float,
+    stochastic: bool,
+) -> Tensor:
+    """Draw deterministic or stochastic samples from a diagonal Gaussian.
+
+    Args:
+        mean: Mean tensor with shape `[N]` or `[N, H]`.
+        variance: Variance tensor with the same shape as `mean`.
+        sample_count: Number of pathwise samples.
+        floor: Numerical variance floor.
+        stochastic: Whether to use random reparameterized samples.
+
+    Returns:
+        Samples with shape `[S, N]` or `[S, N, H]`.
+    """
+    safe_variance = torch.clamp(variance, min=floor)
+    safe_std = torch.sqrt(safe_variance)
+    if sample_count <= 1:
+        return mean.unsqueeze(0)
+    expand_shape = (sample_count,) + mean.shape
+    if stochastic:
+        noise = torch.randn(expand_shape, device=mean.device, dtype=mean.dtype)
+    else:
+        quantiles = torch.linspace(
+            0.5 / float(sample_count),
+            1.0 - (0.5 / float(sample_count)),
+            sample_count,
+            device=mean.device,
+            dtype=mean.dtype,
+        )
+        base_noise = math.sqrt(2.0) * torch.erfinv((2.0 * quantiles) - 1.0)
+        view_shape = (sample_count,) + (1,) * mean.ndim
+        noise = base_noise.view(view_shape).expand(expand_shape)
+    return mean.unsqueeze(0) + noise * safe_std.unsqueeze(0)
+
+
 @dataclass
 class SparseGPConfig:
     """Configuration for the sparse spatiotemporal GP state model."""
@@ -128,6 +175,16 @@ class ObservationModelConfig:
     use_latent_ode: bool = True
     latent_ode_hidden_dim: int = 32
     latent_ode_weight: float = 0.05
+    use_fault_head: bool = False
+    fault_head_hidden_dim: int = 32
+    fault_self_supervised_weight: float = 0.2
+    fault_corruption_probability: float = 0.2
+    fault_score_state_weight: float = 0.5
+    fault_score_embedding_weight: float = 0.05
+    fault_score_temporal_weight: float = 0.35
+    fault_score_persistence_weight: float = 0.2
+    fault_score_probability_weight: float = 0.8
+    fault_target_false_alarm_rate: float = 0.05
 
     def __post_init__(self) -> None:
         valid_modes = {"stddev", "quantile", "hybrid"}
@@ -174,6 +231,24 @@ class ObservationModelConfig:
             raise ValueError("latent_ode_hidden_dim must be positive.")
         if self.latent_ode_weight < 0.0:
             raise ValueError("latent_ode_weight must be non-negative.")
+        if self.fault_head_hidden_dim <= 0:
+            raise ValueError("fault_head_hidden_dim must be positive.")
+        if self.fault_self_supervised_weight < 0.0:
+            raise ValueError("fault_self_supervised_weight must be non-negative.")
+        if not 0.0 <= self.fault_corruption_probability < 1.0:
+            raise ValueError("fault_corruption_probability must lie in [0, 1).")
+        if self.fault_score_state_weight < 0.0:
+            raise ValueError("fault_score_state_weight must be non-negative.")
+        if self.fault_score_embedding_weight < 0.0:
+            raise ValueError("fault_score_embedding_weight must be non-negative.")
+        if self.fault_score_temporal_weight < 0.0:
+            raise ValueError("fault_score_temporal_weight must be non-negative.")
+        if self.fault_score_persistence_weight < 0.0:
+            raise ValueError("fault_score_persistence_weight must be non-negative.")
+        if self.fault_score_probability_weight < 0.0:
+            raise ValueError("fault_score_probability_weight must be non-negative.")
+        if not 0.0 < self.fault_target_false_alarm_rate < 1.0:
+            raise ValueError("fault_target_false_alarm_rate must lie in (0, 1).")
 
 
 @dataclass
@@ -219,11 +294,27 @@ class MissingMechanismConfig:
     health_kl_weight: float = 1e-3
     health_reconstruction_weight: float = 0.1
     variational_logvar_clip: float = 4.0
+    generative_samples: int = 4
+    use_temporal_transition_prior: bool = True
+    transition_time_index: int | None = None
+    transition_group_key: str = "sensor_instance"
+    transition_hidden_dim: int = 32
+    transition_weight: float = 5e-2
+    health_transition_weight: float = 1e-2
 
     def __post_init__(self) -> None:
         valid_modes = {"selection", "pattern_mixture"}
         valid_assumptions = {"homogeneous", "sensor_conditional"}
-        valid_inference_strategies = {"plug_in", "joint_variational"}
+        valid_inference_strategies = {"plug_in", "joint_variational", "joint_generative"}
+        valid_transition_group_keys = {
+            "sensor_instance",
+            "sensor_group",
+            "sensor_type",
+            "sensor_modality",
+            "installation_environment",
+            "maintenance_state",
+            "global",
+        }
         if self.mode not in valid_modes:
             raise ValueError(f"mode must be one of {sorted(valid_modes)}.")
         if self.assumption not in valid_assumptions:
@@ -254,12 +345,27 @@ class MissingMechanismConfig:
             raise ValueError("health_reconstruction_weight must be non-negative.")
         if self.variational_logvar_clip <= 0.0:
             raise ValueError("variational_logvar_clip must be positive.")
+        if self.generative_samples <= 0:
+            raise ValueError("generative_samples must be positive.")
+        if self.transition_group_key not in valid_transition_group_keys:
+            raise ValueError(
+                f"transition_group_key must be one of {sorted(valid_transition_group_keys)}."
+            )
+        if self.transition_hidden_dim <= 0:
+            raise ValueError("transition_hidden_dim must be positive.")
+        if self.transition_weight < 0.0:
+            raise ValueError("transition_weight must be non-negative.")
+        if self.health_transition_weight < 0.0:
+            raise ValueError("health_transition_weight must be non-negative.")
+        if self.transition_time_index is not None and self.transition_time_index < 0:
+            raise ValueError("transition_time_index must be non-negative when provided.")
 
 
 @dataclass
 class SensorMetadataBatch:
     """Categorical and continuous sensor metadata for heterogeneous missingness."""
 
+    sensor_instance: Tensor | None = None
     sensor_type: Tensor | None = None
     sensor_group: Tensor | None = None
     sensor_modality: Tensor | None = None
@@ -278,6 +384,7 @@ class SensorMetadataBatch:
         if isinstance(metadata, cls):
             return metadata
         return cls(
+            sensor_instance=metadata.get("sensor_instance"),
             sensor_type=metadata.get("sensor_type"),
             sensor_group=metadata.get("sensor_group"),
             sensor_modality=metadata.get("sensor_modality"),
@@ -520,6 +627,15 @@ class DynamicObservationModel(nn.Module):
         else:
             self.dbn_emission = None
             self.dbn_transition_logits = None
+        fault_input_dim = diagnosis_input_dim + self.config.diagnosis_embedding_dim + 1
+        if self.config.use_fault_head:
+            self.fault_head = nn.Sequential(
+                nn.Linear(fault_input_dim, self.config.fault_head_hidden_dim),
+                nn.SiLU(),
+                nn.Linear(self.config.fault_head_hidden_dim, 1),
+            )
+        else:
+            self.fault_head = None
         self.register_buffer("calibrated_quantile", torch.tensor(float("nan")))
 
     @staticmethod
@@ -652,6 +768,10 @@ class DynamicObservationModel(nn.Module):
             history["physics_loss"] = []
             history["latent_ode_loss"] = []
             history["curriculum_mask_probability"] = []
+        if self.config.use_fault_head:
+            history["fault_self_supervised_loss"] = []
+            history["fault_probability_mean"] = []
+            history["fault_corruption_rate"] = []
         if not observed_mask.any():
             return history
         active_steps = self.config.link_fit_steps if steps is None else steps
@@ -710,6 +830,19 @@ class DynamicObservationModel(nn.Module):
                 history["physics_loss"].append(float(ssd_components["physics_loss"].item()))
                 history["latent_ode_loss"].append(float(ssd_components["latent_ode_loss"].item()))
                 history["curriculum_mask_probability"].append(float(ssd_components["mask_probability"].item()))
+            if self.config.use_fault_head:
+                fault_components = self.fault_self_supervision_components(
+                    y_true=y_true[observed_mask],
+                    z_mean=z_mean[observed_mask],
+                    z_var=filtered_var if filtered_var is not None else torch.ones_like(z_mean[observed_mask]),
+                    context=filtered_context,
+                    sensor_metadata=filtered_metadata,
+                )
+                fault_loss = self.config.fault_self_supervised_weight * fault_components["fault_loss"]
+                loss = loss + fault_loss
+                history["fault_self_supervised_loss"].append(float(fault_components["fault_loss"].item()))
+                history["fault_probability_mean"].append(float(fault_components["fault_probability_mean"].item()))
+                history["fault_corruption_rate"].append(float(fault_components["fault_corruption_rate"].item()))
             loss.backward()
             optimizer.step()
             history["loss"].append(float(loss.item()))
@@ -871,6 +1004,166 @@ class DynamicObservationModel(nn.Module):
                 dim=-1,
             )
         return self.diagnosis_encoder(features)
+
+    def _fault_head_input(
+        self,
+        y_true: Tensor,
+        z_mean: Tensor,
+        z_var: Tensor,
+        *,
+        context: Tensor | None = None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
+        calibration_residuals: Tensor | None = None,
+    ) -> Tensor:
+        """Assemble self-supervised fault features with shape `[N, F]`."""
+        features = self._diagnosis_feature_stack(
+            y_true=y_true,
+            z_mean=z_mean,
+            z_var=z_var,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            calibration_residuals=calibration_residuals,
+        )
+        embedding = self.diagnosis_embedding(
+            y_true=y_true,
+            z_mean=z_mean,
+            z_var=z_var,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            calibration_residuals=calibration_residuals,
+        )
+        if self.config.use_dbn:
+            with torch.no_grad():
+                state_probs = self.infer_sensor_state_probs(
+                    y_true=y_true,
+                    z_mean=z_mean,
+                    z_var=z_var,
+                    context=context,
+                    sensor_metadata=sensor_metadata,
+                    calibration_residuals=calibration_residuals,
+                )
+            normal_probability = state_probs[:, :1]
+            state_deviation = 1.0 - normal_probability
+        else:
+            state_deviation = torch.zeros(
+                y_true.shape[0],
+                1,
+                device=y_true.device,
+                dtype=y_true.dtype,
+            )
+        return torch.cat([features, embedding, state_deviation], dim=-1)
+
+    def _sample_fault_corruption(
+        self,
+        y_true: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Generate synthetic corruptions for self-supervised fault learning."""
+        y_true = _ensure_1d(y_true, name="y_true")
+        if y_true.numel() == 0:
+            return y_true, torch.zeros_like(y_true, dtype=torch.bool)
+        scale = torch.clamp(y_true.std(unbiased=False), min=1.0)
+        corrupted = y_true.clone()
+        fault_mask = torch.rand_like(y_true) < self.config.fault_corruption_probability
+        if not fault_mask.any():
+            return corrupted, fault_mask
+        scenario_draw = torch.randint(0, 4, (y_true.shape[0],), device=y_true.device)
+        spike_mask = fault_mask & (scenario_draw == 0)
+        freeze_mask = fault_mask & (scenario_draw == 1)
+        drift_mask = fault_mask & (scenario_draw == 2)
+        dropout_mask = fault_mask & (scenario_draw == 3)
+
+        if spike_mask.any():
+            signs = torch.where(
+                torch.rand(int(spike_mask.sum().item()), device=y_true.device) > 0.5,
+                1.0,
+                -1.0,
+            )
+            corrupted[spike_mask] = corrupted[spike_mask] + signs * 3.5 * scale
+        if freeze_mask.any():
+            shifted = torch.roll(y_true, shifts=1)
+            shifted[0] = y_true[0]
+            corrupted[freeze_mask] = shifted[freeze_mask]
+        if drift_mask.any():
+            ramp = torch.linspace(-1.0, 1.0, y_true.shape[0], device=y_true.device, dtype=y_true.dtype)
+            corrupted[drift_mask] = corrupted[drift_mask] + 2.0 * scale * ramp[drift_mask]
+        if dropout_mask.any():
+            corrupted[dropout_mask] = y_true.mean() - 4.0 * scale
+        return corrupted, fault_mask
+
+    def fault_self_supervision_components(
+        self,
+        y_true: Tensor,
+        z_mean: Tensor,
+        z_var: Tensor,
+        *,
+        context: Tensor | None = None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
+        calibration_residuals: Tensor | None = None,
+    ) -> dict[str, Tensor]:
+        """Return self-supervised fault-classification loss and probability stats."""
+        if not self.config.use_fault_head or self.fault_head is None:
+            zero = z_mean.new_tensor(0.0)
+            return {
+                "fault_loss": zero,
+                "fault_probability_mean": zero,
+                "fault_corruption_rate": zero,
+            }
+        corrupted_y, fault_mask = self._sample_fault_corruption(y_true)
+        fault_input = self._fault_head_input(
+            corrupted_y,
+            z_mean,
+            z_var,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            calibration_residuals=calibration_residuals,
+        )
+        logits = self.fault_head(fault_input).squeeze(-1)
+        targets = fault_mask.float()
+        positive_count = float(targets.sum().item())
+        negative_count = float(targets.numel() - positive_count)
+        pos_weight = (
+            logits.new_tensor(max(negative_count / max(positive_count, 1.0), 1.0))
+            if positive_count > 0.0
+            else logits.new_tensor(1.0)
+        )
+        loss = F.binary_cross_entropy_with_logits(logits, targets, pos_weight=pos_weight)
+        probability = torch.sigmoid(logits)
+        return {
+            "fault_loss": loss,
+            "fault_probability_mean": probability.mean(),
+            "fault_corruption_rate": targets.mean(),
+        }
+
+    def fault_probability(
+        self,
+        y_true: Tensor,
+        z_mean: Tensor,
+        z_var: Tensor,
+        *,
+        context: Tensor | None = None,
+        sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
+        calibration_residuals: Tensor | None = None,
+    ) -> Tensor:
+        """Estimate fault probability with shape `[N]` from observation diagnostics."""
+        if not self.config.use_fault_head or self.fault_head is None:
+            threshold = self._compute_threshold(z_var=z_var, calibration_residuals=calibration_residuals)
+            residual = self.compute_residual(
+                y_true=y_true,
+                z_mean=z_mean,
+                z_var=z_var,
+                context=context,
+                sensor_metadata=sensor_metadata,
+            )
+            return torch.sigmoid((residual / torch.clamp(threshold, min=self.config.threshold_floor)) - 1.0)
+        fault_input = self._fault_head_input(
+            y_true,
+            z_mean,
+            z_var,
+            context=context,
+            sensor_metadata=sensor_metadata,
+            calibration_residuals=calibration_residuals,
+        )
+        return torch.sigmoid(self.fault_head(fault_input).squeeze(-1))
 
     def _curriculum_mask_probability(self, training_progress: float | None = None) -> float:
         """Return the current corruption probability for PI-SSD curriculum training."""
@@ -1195,15 +1488,14 @@ class DynamicObservationModel(nn.Module):
 
 
 class MissingMechanism(nn.Module):
-    """Structural missingness model with scalable plug-in and joint-style variants.
+    """Structural missingness model with scalable plug-in and joint latent variants.
 
-    The default `plug_in` strategy matches the earlier modular pipeline and
-    conditions directly on posterior summaries from M1. The optional
-    `joint_variational` strategy adds an amortized encoder that refines latent
-    summaries using `(Y_obs, R, context)` before predicting missingness and
-    penalizes the refinement with KL and observation-reconstruction terms.
-    This is still lighter than a full GP-VAE, but it moves the codebase toward
-    joint latent-missingness inference without breaking sparse-GP scalability.
+    The baseline `plug_in` strategy conditions directly on sparse-GP posterior
+    summaries from M1. `joint_variational` adds an amortized latent adapter on
+    top of those summaries. `joint_generative` goes one step further and
+    optimizes a sampled ELBO-style objective with observation reconstruction and
+    missingness likelihood terms under reparameterized latent and sensor-health
+    posteriors, while still anchoring the latent prior to the sparse GP.
     """
 
     def __init__(self, config: MissingMechanismConfig | None = None) -> None:
@@ -1262,7 +1554,7 @@ class MissingMechanism(nn.Module):
             self.group_weight = None
             self.group_bias = None
 
-        if self.config.inference_strategy == "joint_variational":
+        if self.config.inference_strategy in {"joint_variational", "joint_generative"}:
             encoder_input_dim = 2 + self.aux_feature_dim
             if self.config.use_observed_y_in_variational_encoder:
                 encoder_input_dim += 1
@@ -1274,7 +1566,7 @@ class MissingMechanism(nn.Module):
             )
             self.variational_head = nn.Linear(self.config.encoder_hidden_dim, 2)
             self.observation_decoder = self._make_variational_mlp(
-                input_dim=2 + self.aux_feature_dim,
+                input_dim=2 + self.aux_feature_dim + health_feature_dim,
                 output_dim=self.config.encoder_hidden_dim,
             )
             self.observation_head = nn.Linear(self.config.encoder_hidden_dim, 2)
@@ -1303,6 +1595,28 @@ class MissingMechanism(nn.Module):
             self.health_encoder = None
             self.health_head = None
             self.health_decoder = None
+        if self.config.inference_strategy == "joint_generative" and self.config.use_temporal_transition_prior:
+            transition_input_dim = 2 + health_feature_dim + self.aux_feature_dim
+            self.latent_transition_model = nn.Sequential(
+                nn.Linear(transition_input_dim, self.config.transition_hidden_dim),
+                nn.SiLU(),
+                nn.Linear(self.config.transition_hidden_dim, self.config.transition_hidden_dim),
+                nn.SiLU(),
+                nn.Linear(self.config.transition_hidden_dim, 2),
+            )
+            if self.config.use_sensor_health_latent:
+                self.health_transition_model = nn.Sequential(
+                    nn.Linear(transition_input_dim, self.config.transition_hidden_dim),
+                    nn.SiLU(),
+                    nn.Linear(self.config.transition_hidden_dim, self.config.transition_hidden_dim),
+                    nn.SiLU(),
+                    nn.Linear(self.config.transition_hidden_dim, 2 * self.config.health_latent_dim),
+                )
+            else:
+                self.health_transition_model = None
+        else:
+            self.latent_transition_model = None
+            self.health_transition_model = None
 
     def _maybe_embedding(self, cardinality: int) -> nn.Embedding | None:
         """Create an embedding only when categorical support is configured."""
@@ -1557,7 +1871,10 @@ class MissingMechanism(nn.Module):
         """Refine latent summaries with an amortized joint-style encoder."""
         safe_var = torch.clamp(_ensure_1d(z_var, name="z_var"), min=self.config.variance_floor)
         z_mean = _ensure_1d(z_mean, name="z_mean")
-        if self.config.inference_strategy != "joint_variational" or self.variational_encoder is None:
+        if (
+            self.config.inference_strategy not in {"joint_variational", "joint_generative"}
+            or self.variational_encoder is None
+        ):
             zero = z_mean.new_tensor(0.0)
             observed_y, available = self._resolve_observation_features(
                 batch_size=z_mean.shape[0],
@@ -1669,6 +1986,68 @@ class MissingMechanism(nn.Module):
         merged_stats.update(health_stats)
         return latent_mean, latent_var, merged_stats
 
+    def _decode_observation_distribution(
+        self,
+        *,
+        latent_location: Tensor,
+        latent_variance: Tensor,
+        aux_features: Tensor,
+        health_latent: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        """Decode the observation-space Gaussian under the current latent state."""
+        if self.observation_decoder is None or self.observation_head is None:
+            raise RuntimeError("Observation decoder is unavailable for the current inference strategy.")
+        decoder_parts = [
+            latent_location.unsqueeze(-1),
+            torch.sqrt(torch.clamp(latent_variance, min=self.config.variance_floor)).unsqueeze(-1),
+        ]
+        if self.config.use_sensor_health_latent:
+            if health_latent is None:
+                health_latent = torch.zeros(
+                    latent_location.shape[0],
+                    self.config.health_latent_dim,
+                    device=latent_location.device,
+                    dtype=latent_location.dtype,
+                )
+            decoder_parts.append(health_latent)
+        if aux_features.numel() > 0:
+            decoder_parts.append(aux_features)
+        decoder_input = torch.cat(decoder_parts, dim=-1)
+        hidden = self.observation_decoder(decoder_input)
+        reconstruction_mean, reconstruction_scale = self.observation_head(hidden).unbind(dim=-1)
+        reconstruction_var = torch.clamp(
+            F.softplus(reconstruction_scale) + self.config.variance_floor,
+            min=self.config.variance_floor,
+        )
+        return reconstruction_mean, reconstruction_var
+
+    def _generative_sample_paths(
+        self,
+        *,
+        latent_mean: Tensor,
+        latent_var: Tensor,
+        health_mean: Tensor,
+        health_var: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Sample latent and health paths for the generative ELBO approximation."""
+        sample_count = self.config.generative_samples
+        stochastic = self.training
+        latent_samples = _diagonal_gaussian_samples(
+            latent_mean,
+            latent_var,
+            sample_count=sample_count,
+            floor=self.config.variance_floor,
+            stochastic=stochastic,
+        )
+        health_samples = _diagonal_gaussian_samples(
+            health_mean,
+            health_var,
+            sample_count=sample_count,
+            floor=self.config.variance_floor,
+            stochastic=stochastic,
+        )
+        return latent_samples, health_samples
+
     def infer_health_posterior(
         self,
         z_mean: Tensor,
@@ -1747,24 +2126,47 @@ class MissingMechanism(nn.Module):
         observed_mask = observation_available > 0.0
         if not observed_mask.any():
             return posterior_mean.new_tensor(0.0)
-        decoder_parts = [
-            posterior_mean.unsqueeze(-1),
-            torch.sqrt(torch.clamp(posterior_var, min=self.config.variance_floor)).unsqueeze(-1),
-        ]
-        if aux_features.numel() > 0:
-            decoder_parts.append(aux_features)
-        decoder_input = torch.cat(decoder_parts, dim=-1)
-        hidden = self.observation_decoder(decoder_input)
-        reconstruction_mean, reconstruction_scale = self.observation_head(hidden).unbind(dim=-1)
-        reconstruction_var = torch.clamp(
-            F.softplus(reconstruction_scale) + self.config.variance_floor,
-            min=self.config.variance_floor,
+        reconstruction_mean, reconstruction_var = self._decode_observation_distribution(
+            latent_location=posterior_mean,
+            latent_variance=posterior_var,
+            aux_features=aux_features,
         )
         losses = 0.5 * (
             torch.log(reconstruction_var)
             + (observed_y - reconstruction_mean).pow(2) / reconstruction_var
         )
         return losses[observed_mask].mean()
+
+    def _sampled_reconstruction_loss(
+        self,
+        *,
+        latent_samples: Tensor,
+        latent_var: Tensor,
+        health_samples: Tensor,
+        aux_features: Tensor,
+        observed_y: Tensor,
+        observation_available: Tensor,
+    ) -> Tensor:
+        """Approximate expected observation NLL under sampled latent paths."""
+        if self.observation_decoder is None or self.observation_head is None:
+            return latent_var.new_tensor(0.0)
+        observed_mask = observation_available > 0.0
+        if not observed_mask.any():
+            return latent_var.new_tensor(0.0)
+        sample_losses: list[Tensor] = []
+        for sample_index in range(latent_samples.shape[0]):
+            reconstruction_mean, reconstruction_var = self._decode_observation_distribution(
+                latent_location=latent_samples[sample_index],
+                latent_variance=latent_var,
+                aux_features=aux_features,
+                health_latent=health_samples[sample_index],
+            )
+            losses = 0.5 * (
+                torch.log(reconstruction_var)
+                + (observed_y - reconstruction_mean).pow(2) / reconstruction_var
+            )
+            sample_losses.append(losses[observed_mask].mean())
+        return torch.stack(sample_losses).mean()
 
     def _infer_health_posterior_from_aux(
         self,
@@ -1835,6 +2237,126 @@ class MissingMechanism(nn.Module):
             "health_reconstruction_loss": health_reconstruction_loss,
         }
 
+    def _transition_group_tensor(
+        self,
+        metadata: SensorMetadataBatch,
+        *,
+        batch_size: int,
+        device: torch.device,
+    ) -> Tensor:
+        """Resolve a grouping tensor for sequence-aware temporal regularization."""
+        key = self.config.transition_group_key
+        if key == "global":
+            return torch.zeros(batch_size, dtype=torch.long, device=device)
+        tensor = getattr(metadata, key, None)
+        if tensor is None:
+            return torch.zeros(batch_size, dtype=torch.long, device=device)
+        return _ensure_1d(tensor, name=key).long().to(device=device)
+
+    def _temporal_transition_losses(
+        self,
+        *,
+        latent_mean: Tensor,
+        latent_var: Tensor,
+        health_mean: Tensor,
+        health_var: Tensor,
+        aux_features: Tensor,
+        X: Tensor | None,
+        sensor_metadata: SensorMetadataBatch,
+    ) -> tuple[Tensor, Tensor]:
+        """Compute sequence-aware transition KL penalties for the generative path."""
+        zero = latent_mean.new_tensor(0.0)
+        if (
+            self.config.inference_strategy != "joint_generative"
+            or not self.config.use_temporal_transition_prior
+            or self.latent_transition_model is None
+            or X is None
+            or self.config.transition_time_index is None
+        ):
+            return zero, zero
+        X = _ensure_2d(X, name="X")
+        if self.config.transition_time_index >= X.shape[1]:
+            return zero, zero
+
+        time_values = X[:, self.config.transition_time_index]
+        group_ids = self._transition_group_tensor(
+            sensor_metadata,
+            batch_size=latent_mean.shape[0],
+            device=latent_mean.device,
+        )
+        transition_losses: list[Tensor] = []
+        health_transition_losses: list[Tensor] = []
+
+        for group_id in torch.unique(group_ids):
+            member_mask = group_ids == group_id
+            member_indices = member_mask.nonzero(as_tuple=False).squeeze(-1)
+            if member_indices.numel() < 2:
+                continue
+            ordered = member_indices[torch.argsort(time_values[member_indices])]
+            prev_index = ordered[:-1]
+            next_index = ordered[1:]
+            delta_t = torch.clamp(
+                (time_values[next_index] - time_values[prev_index]).abs().unsqueeze(-1),
+                min=self.config.variance_floor,
+            )
+            transition_input_parts = [
+                latent_mean[prev_index].unsqueeze(-1),
+                torch.log(delta_t),
+            ]
+            if self.config.use_sensor_health_latent:
+                transition_input_parts.append(health_mean[prev_index])
+            if aux_features.numel() > 0:
+                transition_input_parts.append(aux_features[prev_index])
+            transition_input = torch.cat(transition_input_parts, dim=-1)
+
+            pred_mean, pred_logvar = self.latent_transition_model(transition_input).unbind(dim=-1)
+            pred_logvar = torch.clamp(
+                pred_logvar,
+                min=-self.config.variational_logvar_clip,
+                max=self.config.variational_logvar_clip,
+            )
+            pred_var = torch.exp(pred_logvar)
+            next_var = torch.clamp(latent_var[next_index], min=self.config.variance_floor)
+            transition_kl = 0.5 * (
+                torch.log(pred_var)
+                - torch.log(next_var)
+                + (next_var + (latent_mean[next_index] - pred_mean).pow(2)) / pred_var
+                - 1.0
+            )
+            transition_losses.append(transition_kl.mean())
+
+            if (
+                self.config.use_sensor_health_latent
+                and self.health_transition_model is not None
+                and health_mean.numel() > 0
+            ):
+                health_pred = self.health_transition_model(transition_input)
+                pred_health_mean, pred_health_logvar = torch.chunk(health_pred, 2, dim=-1)
+                pred_health_logvar = torch.clamp(
+                    pred_health_logvar,
+                    min=-self.config.variational_logvar_clip,
+                    max=self.config.variational_logvar_clip,
+                )
+                pred_health_var = torch.exp(pred_health_logvar)
+                next_health_var = torch.clamp(
+                    health_var[next_index],
+                    min=self.config.variance_floor,
+                )
+                health_kl = 0.5 * (
+                    torch.log(pred_health_var)
+                    - torch.log(next_health_var)
+                    + (next_health_var + (health_mean[next_index] - pred_health_mean).pow(2)) / pred_health_var
+                    - 1.0
+                )
+                health_transition_losses.append(health_kl.sum(dim=-1).mean())
+
+        if not transition_losses:
+            return zero, zero
+        transition_loss = torch.stack(transition_losses).mean()
+        if not health_transition_losses:
+            return transition_loss, zero
+        return transition_loss, torch.stack(health_transition_losses).mean()
+
     def _compute_logits_from_aux(
         self,
         *,
@@ -1874,6 +2396,100 @@ class MissingMechanism(nn.Module):
         logits = self.selection_head(hidden).squeeze(-1)
         logits = logits + self._group_head_adjustment(hidden=hidden, sensor_group=sensor_group)
         return logits * float(logit_scale)
+
+    def _sampled_missingness_probability(
+        self,
+        *,
+        latent_mean: Tensor,
+        latent_var: Tensor,
+        aux_features: Tensor,
+        sensor_group: Tensor | None,
+        health_mean: Tensor,
+        health_var: Tensor,
+        logit_scale: float,
+    ) -> Tensor:
+        """Approximate `p(R=0 | q(z, h))` under sampled latent paths."""
+        latent_samples, health_samples = self._generative_sample_paths(
+            latent_mean=latent_mean,
+            latent_var=latent_var,
+            health_mean=health_mean,
+            health_var=health_var,
+        )
+        sample_probabilities: list[Tensor] = []
+        for sample_index in range(latent_samples.shape[0]):
+            logits = self._compute_logits_from_aux(
+                z_mean=latent_samples[sample_index],
+                z_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=sensor_group,
+                logit_scale=logit_scale,
+                health_mean=health_samples[sample_index],
+            )
+            sample_probabilities.append(torch.sigmoid(logits))
+        mean_probability = torch.stack(sample_probabilities, dim=0).mean(dim=0)
+        return torch.clamp(
+            mean_probability,
+            min=self.config.probability_floor,
+            max=1.0 - self.config.probability_floor,
+        )
+
+    def _sampled_missingness_loss(
+        self,
+        *,
+        target_missing: Tensor,
+        latent_mean: Tensor,
+        latent_var: Tensor,
+        aux_features: Tensor,
+        sensor_group: Tensor | None,
+        health_mean: Tensor,
+        health_var: Tensor,
+        sample_weight: Tensor | None,
+        latent_samples: Tensor | None = None,
+        health_samples: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        """Approximate expected Bernoulli NLL under sampled latent paths."""
+        if latent_samples is None or health_samples is None:
+            latent_samples, health_samples = self._generative_sample_paths(
+                latent_mean=latent_mean,
+                latent_var=latent_var,
+                health_mean=health_mean,
+                health_var=health_var,
+            )
+        sample_losses: list[Tensor] = []
+        sample_probabilities: list[Tensor] = []
+        pos_weight = None
+        if self.config.positive_class_weight != 1.0:
+            pos_weight = latent_mean.new_tensor(self.config.positive_class_weight)
+        for sample_index in range(latent_samples.shape[0]):
+            logits = self._compute_logits_from_aux(
+                z_mean=latent_samples[sample_index],
+                z_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=sensor_group,
+                logit_scale=1.0,
+                health_mean=health_samples[sample_index],
+            )
+            if sample_weight is None:
+                sample_losses.append(
+                    F.binary_cross_entropy_with_logits(logits, target_missing, pos_weight=pos_weight)
+                )
+            else:
+                losses = F.binary_cross_entropy_with_logits(
+                    logits,
+                    target_missing,
+                    reduction="none",
+                    pos_weight=pos_weight,
+                )
+                weighted = (losses * sample_weight).sum() / torch.clamp(sample_weight.sum(), min=1.0)
+                sample_losses.append(weighted)
+            sample_probabilities.append(torch.sigmoid(logits))
+        mean_probability = torch.stack(sample_probabilities, dim=0).mean(dim=0)
+        mean_probability = torch.clamp(
+            mean_probability,
+            min=self.config.probability_floor,
+            max=1.0 - self.config.probability_floor,
+        )
+        return torch.stack(sample_losses).mean(), mean_probability
 
     def _group_head_adjustment(self, hidden: Tensor, sensor_group: Tensor | None) -> Tensor:
         """Apply sensor-group-specific head corrections in the heterogeneous variant."""
@@ -1962,6 +2578,17 @@ class MissingMechanism(nn.Module):
             observation_available=observation_available,
             target_missing=target_missing,
         )
+        if self.config.inference_strategy == "joint_generative":
+            probabilities = self._sampled_missingness_probability(
+                latent_mean=latent_mean,
+                latent_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=metadata.sensor_group,
+                health_mean=health_stats["health_mean"],
+                health_var=health_stats["health_var"],
+                logit_scale=logit_scale,
+            )
+            return _probability_to_logit(probabilities, self.config.probability_floor)
         return self._compute_logits_from_aux(
             z_mean=latent_mean,
             z_var=latent_var,
@@ -1989,6 +2616,46 @@ class MissingMechanism(nn.Module):
         logit_scale: float = 1.0,
     ) -> Tensor:
         """Return structural missingness probabilities with shape `[N]`."""
+        if self.config.inference_strategy == "joint_generative":
+            z_mean = _ensure_1d(z_mean, name="z_mean")
+            z_var = _ensure_1d(z_var, name="z_var")
+            metadata = SensorMetadataBatch.from_input(sensor_metadata)
+            aux_features = self._assemble_auxiliary_features(
+                batch_size=z_mean.shape[0],
+                context=context,
+                M=M,
+                S=S,
+                dynamic_residual=dynamic_residual,
+                dynamic_threshold=dynamic_threshold,
+                dynamic_feature_available=dynamic_feature_available,
+                X=X,
+                sensor_metadata=metadata,
+                device=z_mean.device,
+                dtype=z_mean.dtype,
+            )
+            latent_mean, latent_var, _ = self._infer_latent_posterior_from_aux(
+                z_mean,
+                z_var,
+                aux_features=aux_features,
+                y=y,
+                observation_available=observation_available,
+            )
+            health_stats = self._infer_health_posterior_from_aux(
+                z_mean=latent_mean,
+                z_var=latent_var,
+                aux_features=aux_features,
+                y=y,
+                observation_available=observation_available,
+            )
+            return self._sampled_missingness_probability(
+                latent_mean=latent_mean,
+                latent_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=metadata.sensor_group,
+                health_mean=health_stats["health_mean"],
+                health_var=health_stats["health_var"],
+                logit_scale=logit_scale,
+            )
         logits = self.logit(
             z_mean=z_mean,
             z_var=z_var,
@@ -2129,48 +2796,93 @@ class MissingMechanism(nn.Module):
             observation_available=observation_available,
             target_missing=target_missing,
         )
-        logits = self._compute_logits_from_aux(
-            z_mean=latent_mean,
-            z_var=latent_var,
-            aux_features=aux_features,
-            sensor_group=metadata.sensor_group,
-            logit_scale=1.0,
-            health_mean=health_stats["health_mean"],
-        )
-        target_missing = target_missing.to(logits)
-        pos_weight = None
-        if self.config.positive_class_weight != 1.0:
-            pos_weight = logits.new_tensor(self.config.positive_class_weight)
-        if sample_weight is None:
-            missingness_loss = F.binary_cross_entropy_with_logits(logits, target_missing, pos_weight=pos_weight)
-        else:
-            sample_weight = _ensure_1d(sample_weight, name="sample_weight").to(logits)
-            losses = F.binary_cross_entropy_with_logits(
-                logits,
-                target_missing,
-                reduction="none",
-                pos_weight=pos_weight,
+        target_missing = target_missing.to(z_mean)
+        if sample_weight is not None:
+            sample_weight = _ensure_1d(sample_weight, name="sample_weight").to(z_mean)
+        if self.config.inference_strategy == "joint_generative":
+            latent_samples, health_samples = self._generative_sample_paths(
+                latent_mean=latent_mean,
+                latent_var=latent_var,
+                health_mean=health_stats["health_mean"],
+                health_var=health_stats["health_var"],
             )
-            missingness_loss = (losses * sample_weight).sum() / torch.clamp(sample_weight.sum(), min=1.0)
-
-        reconstruction_loss = self._reconstruction_loss(
-            posterior_mean=latent_mean,
-            posterior_var=latent_var,
-            aux_features=aux_features,
-            observed_y=variational_stats["observed_y"],
-            observation_available=variational_stats["observation_available"],
-        )
+            missingness_loss, mean_probability = self._sampled_missingness_loss(
+                target_missing=target_missing,
+                latent_mean=latent_mean,
+                latent_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=metadata.sensor_group,
+                health_mean=health_stats["health_mean"],
+                health_var=health_stats["health_var"],
+                sample_weight=sample_weight,
+                latent_samples=latent_samples,
+                health_samples=health_samples,
+            )
+            logits = _probability_to_logit(mean_probability, self.config.probability_floor)
+            reconstruction_loss = self._sampled_reconstruction_loss(
+                latent_samples=latent_samples,
+                latent_var=latent_var,
+                health_samples=health_samples,
+                aux_features=aux_features,
+                observed_y=variational_stats["observed_y"],
+                observation_available=variational_stats["observation_available"],
+            )
+        else:
+            logits = self._compute_logits_from_aux(
+                z_mean=latent_mean,
+                z_var=latent_var,
+                aux_features=aux_features,
+                sensor_group=metadata.sensor_group,
+                logit_scale=1.0,
+                health_mean=health_stats["health_mean"],
+            )
+            target_missing = target_missing.to(logits)
+            pos_weight = None
+            if self.config.positive_class_weight != 1.0:
+                pos_weight = logits.new_tensor(self.config.positive_class_weight)
+            if sample_weight is None:
+                missingness_loss = F.binary_cross_entropy_with_logits(logits, target_missing, pos_weight=pos_weight)
+            else:
+                losses = F.binary_cross_entropy_with_logits(
+                    logits,
+                    target_missing,
+                    reduction="none",
+                    pos_weight=pos_weight,
+                )
+                missingness_loss = (losses * sample_weight).sum() / torch.clamp(sample_weight.sum(), min=1.0)
+            reconstruction_loss = self._reconstruction_loss(
+                posterior_mean=latent_mean,
+                posterior_var=latent_var,
+                aux_features=aux_features,
+                observed_y=variational_stats["observed_y"],
+                observation_available=variational_stats["observation_available"],
+            )
         kl_loss = variational_stats["kl_loss"]
         health_kl_loss = health_stats["health_kl_loss"]
         health_reconstruction_loss = health_stats["health_reconstruction_loss"]
+        transition_loss, health_transition_loss = self._temporal_transition_losses(
+            latent_mean=latent_mean,
+            latent_var=latent_var,
+            health_mean=health_stats["health_mean"],
+            health_var=health_stats["health_var"],
+            aux_features=aux_features,
+            X=X,
+            sensor_metadata=metadata,
+        )
         total_loss = missingness_loss
-        if self.config.inference_strategy == "joint_variational":
+        if self.config.inference_strategy in {"joint_variational", "joint_generative"}:
             total_loss = (
                 total_loss
                 + self.config.reconstruction_weight * reconstruction_loss
                 + self.config.kl_weight * kl_loss
                 + self.config.health_kl_weight * health_kl_loss
                 + self.config.health_reconstruction_weight * health_reconstruction_loss
+            )
+        if self.config.inference_strategy == "joint_generative":
+            total_loss = (
+                total_loss
+                + self.config.transition_weight * transition_loss
+                + self.config.health_transition_weight * health_transition_loss
             )
         return {
             "total_loss": total_loss,
@@ -2179,6 +2891,8 @@ class MissingMechanism(nn.Module):
             "kl_loss": kl_loss,
             "health_kl_loss": health_kl_loss,
             "health_reconstruction_loss": health_reconstruction_loss,
+            "transition_loss": transition_loss,
+            "health_transition_loss": health_transition_loss,
         }
 
     def compute_loss(
