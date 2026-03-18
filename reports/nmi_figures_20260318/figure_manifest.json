@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-03-17T22:22:10.472009+00:00",
+  "output_dir": "C:\\Programming Prctice\\reports\\nmi_figures_20260318",
+  "source_dirs": [
+    "C:\\Programming Prctice\\review\\canonical_paper_materials_20260317",
+    "C:\\Programming Prctice\\outputs\\benchmark_joint_q1_large",
+    "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium",
+    "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium",
+    "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium",
+    "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium"
+  ],
+  "figures": {
+    "figure_1": {
+      "png": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_01_saids_framework.png",
+      "pdf": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_01_saids_framework.pdf"
+    },
+    "figure_2": {
+      "png": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_02_crps_mechanism_intensity.png",
+      "pdf": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_02_crps_mechanism_intensity.pdf"
+    },
+    "figure_3": {
+      "png": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_03_region_holdout_crps.png",
+      "pdf": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_03_region_holdout_crps.pdf"
+    },
+    "figure_4": {
+      "png": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_04_reliability_shift.png",
+      "pdf": "C:\\Programming Prctice\\reports\\nmi_figures_20260318\\fig_04_reliability_shift.pdf"
+    }
+  }
+}

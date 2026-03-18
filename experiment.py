@@ -18,7 +18,14 @@ import torch
 from torch import Tensor
 
 from models import SensorMetadataBatch
-from pipeline import AblationOutcome, PipelineFitSummary, SilenceAwareIDS, SilenceAwareIDSConfig
+from pipeline import (
+    AblationOutcome,
+    PipelineFitSummary,
+    SilenceAwareIDS,
+    SilenceAwareIDSConfig,
+    _slice_metadata,
+    _slice_optional,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -819,6 +826,233 @@ class ResearchExperimentRunner:
             return None, None, None
         return 131_072, 32_768, 32_768
 
+    def _ablation_candidate_limit(self, variant: SilenceAwareIDS) -> int | None:
+        """Resolve a safe candidate-pool cap for expensive policy ablations."""
+        planning_strategy = variant.config.policy.planning_strategy
+        if planning_strategy == "ppo_online":
+            return min(2048, max(variant.config.policy.ppo_max_candidates, 1024))
+        if planning_strategy == "ppo_warmstart":
+            return min(3072, max(variant.config.policy.ppo_max_candidates * 2, 1536))
+        if planning_strategy == "non_myopic_rollout":
+            return 4096
+        if planning_strategy == "lazy_greedy" and variant.config.use_m5:
+            return 4096
+        return None
+
+    def _ablation_evaluation_limit(self, variant: SilenceAwareIDS) -> int | None:
+        """Resolve a safe evaluation-row cap for heavy policy ablations."""
+        planning_strategy = variant.config.policy.planning_strategy
+        if planning_strategy == "ppo_online":
+            return 2048
+        if planning_strategy == "ppo_warmstart":
+            return 2048
+        if planning_strategy == "non_myopic_rollout":
+            return 3072
+        if planning_strategy == "lazy_greedy" and variant.config.use_m5:
+            return 4096
+        return None
+
+    def _sensitivity_evaluation_limit(self, prepared: PreparedExperimentData) -> int | None:
+        """Resolve a safe evaluation-row cap for post-ablation sensitivity sweeps."""
+        evaluation_rows = int(prepared.evaluation.X.shape[0])
+        if not self.run_config.auto_scale_large_runs:
+            return None
+        if evaluation_rows <= 8192:
+            return None
+        return 8192
+
+    def _cap_sensitivity_evaluation(
+        self,
+        prepared: PreparedExperimentData,
+        *,
+        batch_size: int | None,
+    ) -> tuple[
+        Tensor,
+        Tensor,
+        Tensor | None,
+        Tensor | None,
+        Tensor | None,
+        SensorMetadataBatch | dict[str, Tensor] | None,
+        int | None,
+        dict[str, Any],
+    ]:
+        """Downsample evaluation rows for sensitivity analysis on large runs."""
+        X_eval = prepared.evaluation.X
+        y_eval = prepared.evaluation.y
+        context_eval = prepared.evaluation.context
+        M_eval = prepared.evaluation.M
+        S_eval = prepared.evaluation.S
+        sensor_metadata_eval = prepared.evaluation.sensor_metadata
+        limit = self._sensitivity_evaluation_limit(prepared)
+        effective_batch_size = batch_size
+        if limit is None or X_eval.shape[0] <= limit:
+            if effective_batch_size is not None and limit is not None:
+                effective_batch_size = min(int(effective_batch_size), 256)
+            return (
+                X_eval,
+                y_eval,
+                context_eval,
+                M_eval,
+                S_eval,
+                sensor_metadata_eval,
+                effective_batch_size,
+                {
+                    "applied": False,
+                    "limit": limit,
+                    "original_rows": int(X_eval.shape[0]),
+                    "effective_rows": int(X_eval.shape[0]),
+                    "evaluation_batch_size": None if effective_batch_size is None else int(effective_batch_size),
+                },
+            )
+        index = self._row_cap_indices(int(X_eval.shape[0]), int(limit), device=X_eval.device)
+        if effective_batch_size is not None:
+            effective_batch_size = min(int(effective_batch_size), 256)
+        metadata = None if sensor_metadata_eval is None else _slice_metadata(sensor_metadata_eval, index)
+        return (
+            X_eval[index],
+            y_eval[index],
+            _slice_optional(context_eval, index),
+            _slice_optional(M_eval, index),
+            _slice_optional(S_eval, index),
+            metadata,
+            effective_batch_size,
+            {
+                "applied": True,
+                "limit": int(limit),
+                "original_rows": int(X_eval.shape[0]),
+                "effective_rows": int(index.shape[0]),
+                "evaluation_batch_size": None if effective_batch_size is None else int(effective_batch_size),
+            },
+        )
+
+    def _effective_benchmark_candidate_limit(self, prepared: PreparedExperimentData) -> int | None:
+        """Resolve a safe benchmark candidate-pool cap for large framework runs."""
+        if self.run_config.benchmark_candidate_pool_size is not None:
+            return int(self.run_config.benchmark_candidate_pool_size)
+        if not self.run_config.auto_scale_large_runs:
+            return None
+        evaluation_rows = int(prepared.evaluation.X.shape[0])
+        if evaluation_rows < 16384:
+            return None
+        return 65536
+
+    def _cap_ablation_evaluation(
+        self,
+        variant: SilenceAwareIDS,
+        *,
+        X_eval: Tensor,
+        y_eval: Tensor,
+        context_eval: Tensor | None,
+        M_eval: Tensor | None,
+        S_eval: Tensor | None,
+        sensor_metadata_eval: SensorMetadataBatch | dict[str, Tensor] | None,
+        batch_size: int | None,
+    ) -> tuple[
+        Tensor,
+        Tensor,
+        Tensor | None,
+        Tensor | None,
+        Tensor | None,
+        SensorMetadataBatch | dict[str, Tensor] | None,
+        int | None,
+        dict[str, Any],
+    ]:
+        """Downsample evaluation rows for expensive policy ablations."""
+        limit = self._ablation_evaluation_limit(variant)
+        effective_batch_size = batch_size
+        if limit is None or X_eval.shape[0] <= limit:
+            if effective_batch_size is not None and limit is not None:
+                effective_batch_size = min(int(effective_batch_size), 64)
+            return (
+                X_eval,
+                y_eval,
+                context_eval,
+                M_eval,
+                S_eval,
+                sensor_metadata_eval,
+                effective_batch_size,
+                {
+                    "applied": False,
+                    "limit": limit,
+                    "original_rows": int(X_eval.shape[0]),
+                    "effective_rows": int(X_eval.shape[0]),
+                    "evaluation_batch_size": None if effective_batch_size is None else int(effective_batch_size),
+                    "planning_strategy": variant.config.policy.planning_strategy,
+                },
+            )
+        index = self._row_cap_indices(int(X_eval.shape[0]), int(limit), device=X_eval.device)
+        if effective_batch_size is not None:
+            effective_batch_size = min(int(effective_batch_size), 64)
+        metadata = None if sensor_metadata_eval is None else _slice_metadata(sensor_metadata_eval, index)
+        return (
+            X_eval[index],
+            y_eval[index],
+            _slice_optional(context_eval, index),
+            _slice_optional(M_eval, index),
+            _slice_optional(S_eval, index),
+            metadata,
+            effective_batch_size,
+            {
+                "applied": True,
+                "limit": int(limit),
+                "original_rows": int(X_eval.shape[0]),
+                "effective_rows": int(index.shape[0]),
+                "evaluation_batch_size": None if effective_batch_size is None else int(effective_batch_size),
+                "planning_strategy": variant.config.policy.planning_strategy,
+            },
+        )
+
+    def _cap_candidate_pool(
+        self,
+        variant: SilenceAwareIDS,
+        *,
+        candidate_x: Tensor | None,
+        candidate_cost: Tensor | None,
+        candidate_context: Tensor | None,
+        candidate_M: Tensor | None,
+        candidate_S: Tensor | None,
+        candidate_sensor_metadata: SensorMetadataBatch | dict[str, Tensor] | None,
+    ) -> tuple[Tensor | None, Tensor | None, Tensor | None, Tensor | None, Tensor | None, SensorMetadataBatch | dict[str, Tensor] | None, dict[str, Any]]:
+        """Downsample large candidate pools for heavy policy ablations."""
+        if candidate_x is None or candidate_cost is None:
+            return (
+                candidate_x,
+                candidate_cost,
+                candidate_context,
+                candidate_M,
+                candidate_S,
+                candidate_sensor_metadata,
+                {"applied": False},
+            )
+        limit = self._ablation_candidate_limit(variant)
+        if limit is None or candidate_x.shape[0] <= limit:
+            return (
+                candidate_x,
+                candidate_cost,
+                candidate_context,
+                candidate_M,
+                candidate_S,
+                candidate_sensor_metadata,
+                {"applied": False, "limit": limit, "rows": int(candidate_x.shape[0])},
+            )
+        index = self._row_cap_indices(int(candidate_x.shape[0]), int(limit), device=candidate_x.device)
+        metadata = None if candidate_sensor_metadata is None else _slice_metadata(candidate_sensor_metadata, index)
+        return (
+            candidate_x[index],
+            candidate_cost[index],
+            _slice_optional(candidate_context, index),
+            _slice_optional(candidate_M, index),
+            _slice_optional(candidate_S, index),
+            metadata,
+            {
+                "applied": True,
+                "limit": int(limit),
+                "original_rows": int(candidate_x.shape[0]),
+                "effective_rows": int(index.shape[0]),
+                "planning_strategy": variant.config.policy.planning_strategy,
+            },
+        )
+
     def _maybe_cap_prepared_data(self, prepared: PreparedExperimentData) -> tuple[PreparedExperimentData, dict[str, Any]]:
         """Downsample very large prepared splits to stable framework-run caps."""
         train_cap, calibration_cap, evaluation_cap = self._effective_row_caps(prepared)
@@ -907,6 +1141,8 @@ class ResearchExperimentRunner:
         self,
         pipeline: SilenceAwareIDS,
         prepared: PreparedExperimentData,
+        *,
+        progress_callback: Any | None = None,
     ) -> dict[str, Any] | None:
         """Stress-test batched inference and policy selection on expanded candidate pools."""
         expansion_factor = self.run_config.benchmark_expansion_factor
@@ -914,7 +1150,7 @@ class ResearchExperimentRunner:
             return None
 
         evaluation = prepared.evaluation
-        candidate_limit = self.run_config.benchmark_candidate_pool_size
+        candidate_limit = self._effective_benchmark_candidate_limit(prepared)
         expanded_x = self._repeat_rows(evaluation.X, expansion_factor, limit=candidate_limit)
         expanded_context = self._repeat_rows(evaluation.context, expansion_factor, limit=candidate_limit)
         expanded_m = self._repeat_rows(evaluation.M, expansion_factor, limit=candidate_limit)
@@ -929,10 +1165,24 @@ class ResearchExperimentRunner:
             return None
 
         batch_size = self.run_config.prediction_batch_size or self.pipeline_config.state_training.batch_size
+        if progress_callback is not None:
+            progress_callback(
+                "benchmark_prepare_complete",
+                {
+                    "expansion_factor": int(expansion_factor),
+                    "candidate_limit": candidate_limit,
+                    "benchmark_rows": int(expanded_x.shape[0]),
+                    "batch_size": int(batch_size),
+                },
+            )
         predict_start = time.perf_counter()
+        if progress_callback is not None:
+            progress_callback("benchmark_predict_start", {"rows": int(expanded_x.shape[0])})
         mean, variance = pipeline.predict_state(expanded_x, batch_size=batch_size)
         predict_seconds = time.perf_counter() - predict_start
         missingness_start = time.perf_counter()
+        if progress_callback is not None:
+            progress_callback("benchmark_missingness_start", {"rows": int(expanded_x.shape[0])})
         p_miss = pipeline.predict_missingness(
             expanded_x,
             context=expanded_context,
@@ -946,6 +1196,11 @@ class ResearchExperimentRunner:
         selection_seconds = 0.0
         if expanded_cost is not None:
             selection_start = time.perf_counter()
+            if progress_callback is not None:
+                progress_callback(
+                    "benchmark_selection_start",
+                    {"rows": int(expanded_x.shape[0]), "max_selections": self.run_config.max_selections},
+                )
             selection = _selection_to_summary(
                 pipeline.select_sensors(
                     expanded_x,
@@ -960,6 +1215,15 @@ class ResearchExperimentRunner:
                 )
             )
             selection_seconds = time.perf_counter() - selection_start
+        if progress_callback is not None:
+            progress_callback(
+                "benchmark_complete",
+                {
+                    "predict_seconds": float(predict_seconds),
+                    "missingness_seconds": float(missingness_seconds),
+                    "selection_seconds": float(selection_seconds),
+                },
+            )
 
         return {
             "expansion_factor": expansion_factor,
@@ -1219,6 +1483,7 @@ class ResearchExperimentRunner:
         *,
         stage: str,
         pipeline: SilenceAwareIDS | None = None,
+        include_pipeline_state: bool = True,
         fit_summary: PipelineFitSummary | None = None,
         base_metrics: dict[str, float] | None = None,
         ablations: dict[str, AblationOutcome] | None = None,
@@ -1231,11 +1496,24 @@ class ResearchExperimentRunner:
         completed_result: ExperimentResult | None = None,
     ) -> None:
         """Persist pipeline and metric state for resume."""
+        pipeline_state: dict[str, Any] | None = None
+        if pipeline is not None and include_pipeline_state:
+            pipeline_state = self._serialize_pipeline_checkpoint(pipeline)
+        elif checkpoint_path.exists():
+            try:
+                existing_payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+            except Exception:
+                existing_payload = None
+            if (
+                isinstance(existing_payload, dict)
+                and existing_payload.get("signature") == self._checkpoint_signature()
+            ):
+                pipeline_state = existing_payload.get("pipeline_state")
         payload = {
             "signature": self._checkpoint_signature(),
             "stage": stage,
             "updated_at": datetime.now().isoformat(timespec="seconds"),
-            "pipeline_state": None if pipeline is None else self._serialize_pipeline_checkpoint(pipeline),
+            "pipeline_state": pipeline_state,
             "fit_summary": _serialize_fit_summary(fit_summary),
             "base_metrics": {} if base_metrics is None else base_metrics,
             "ablations": _serialize_ablation_outcomes({} if ablations is None else ablations),
@@ -1248,6 +1526,48 @@ class ResearchExperimentRunner:
             "completed_result": None if completed_result is None else completed_result.to_dict(),
         }
         torch.save(payload, checkpoint_path)
+
+    def _ensure_dynamic_silence(
+        self,
+        pipeline: SilenceAwareIDS,
+        batch: TensorBatch,
+        *,
+        batch_size: int | None,
+        heartbeat_path: Path,
+        stage: str,
+    ) -> Tensor | None:
+        """Return a usable dynamic-silence tensor, recomputing it only when required.
+
+        Resume runs used to re-enter base evaluation because silence detection happened
+        before the `base_metrics is None` guard. This helper makes the recomputation
+        explicit so later stages such as sensitivity can request it without forcing the
+        full base-evaluation path to run again.
+        """
+        dynamic_s = batch.S
+        if not pipeline.config.use_m2 or dynamic_s is None:
+            return dynamic_s
+        if torch.count_nonzero(dynamic_s).item() != 0:
+            return dynamic_s
+        self._append_heartbeat(
+            heartbeat_path,
+            stage=stage,
+            step="evaluation_silence_start",
+            payload={"rows": int(batch.X.shape[0])},
+        )
+        dynamic_s = pipeline.detect_silence(
+            batch.X,
+            batch.y,
+            context=batch.context,
+            sensor_metadata=batch.sensor_metadata,
+            batch_size=batch_size,
+        )["dynamic_silence"].float()
+        self._append_heartbeat(
+            heartbeat_path,
+            stage=stage,
+            step="evaluation_silence_complete",
+            payload={"flagged": int(dynamic_s.sum().item())},
+        )
+        return dynamic_s
 
     def _run_ablation_suite_incremental(
         self,
@@ -1284,6 +1604,7 @@ class ResearchExperimentRunner:
         batch_size: int | None,
         existing_results: dict[str, AblationOutcome] | None = None,
         on_variant_complete: Any | None = None,
+        on_variant_progress: Any | None = None,
     ) -> dict[str, AblationOutcome]:
         """Run ablations one variant at a time so progress can be checkpointed."""
         variants = base_pipeline.build_ablation_configs()
@@ -1295,6 +1616,27 @@ class ResearchExperimentRunner:
             if variant_name not in variants:
                 raise KeyError(f"Unknown ablation variant: {variant_name}")
             variant = SilenceAwareIDS(variants[variant_name])
+            (
+                X_eval_variant,
+                y_eval_variant,
+                context_eval_variant,
+                M_eval_variant,
+                S_eval_variant,
+                sensor_metadata_eval_variant,
+                eval_batch_size,
+                evaluation_cap_info,
+            ) = self._cap_ablation_evaluation(
+                variant,
+                X_eval=X_eval,
+                y_eval=y_eval,
+                context_eval=context_eval,
+                M_eval=M_eval,
+                S_eval=S_eval,
+                sensor_metadata_eval=sensor_metadata_eval,
+                batch_size=batch_size,
+            )
+            if on_variant_progress is not None:
+                on_variant_progress(variant_name, "fit_start", evaluation_cap_info)
             fit_summary = variant.fit(
                 X_train,
                 y_train,
@@ -1310,39 +1652,119 @@ class ResearchExperimentRunner:
                 S_cal=S_cal,
                 sensor_metadata_cal=sensor_metadata_cal,
             )
+            if on_variant_progress is not None:
+                on_variant_progress(
+                    variant_name,
+                    "fit_complete",
+                    {
+                        "state_epochs": len(fit_summary.state_history.get("loss", [])),
+                        "missingness_epochs": (
+                            0
+                            if fit_summary.missingness_history is None
+                            else len(fit_summary.missingness_history.get("loss", []))
+                        ),
+                    },
+                )
             eval_s = S_eval
+            if evaluation_cap_info["applied"]:
+                eval_s = S_eval_variant
             if eval_s is None and variant.config.use_m2:
+                if on_variant_progress is not None:
+                    on_variant_progress(variant_name, "silence_start", evaluation_cap_info)
                 eval_s = variant.detect_silence(
-                    X_eval,
-                    y_eval,
-                    context=context_eval,
-                    sensor_metadata=sensor_metadata_eval,
-                    batch_size=batch_size,
+                    X_eval_variant,
+                    y_eval_variant,
+                    context=context_eval_variant,
+                    sensor_metadata=sensor_metadata_eval_variant,
+                    batch_size=eval_batch_size,
                 )["dynamic_silence"].float()
+                if on_variant_progress is not None:
+                    on_variant_progress(
+                        variant_name,
+                        "silence_complete",
+                        {
+                            **evaluation_cap_info,
+                            "flagged": int(eval_s.sum().item()),
+                        },
+                    )
+            if on_variant_progress is not None:
+                on_variant_progress(variant_name, "evaluate_start", evaluation_cap_info)
             metrics = variant.evaluate_predictions(
-                X_eval,
-                y_eval,
-                context=context_eval,
-                M=M_eval,
+                X_eval_variant,
+                y_eval_variant,
+                context=context_eval_variant,
+                M=M_eval_variant,
                 S=eval_s,
-                sensor_metadata=sensor_metadata_eval,
+                sensor_metadata=sensor_metadata_eval_variant,
                 integrate_missingness=variant.use_m3,
-                batch_size=batch_size,
+                batch_size=eval_batch_size,
+                progress_callback=(
+                    None
+                    if on_variant_progress is None
+                    else lambda step, payload, name=variant_name: on_variant_progress(
+                        name,
+                        f"evaluate::{step}",
+                        payload,
+                    )
+                ),
             )
+            if on_variant_progress is not None:
+                on_variant_progress(
+                    variant_name,
+                    "evaluate_complete",
+                    {
+                        **evaluation_cap_info,
+                        "rmse": float(metrics.get("rmse", 0.0)),
+                        "crps": float(metrics.get("crps", 0.0)),
+                    },
+                )
             selection: dict[str, Tensor | list[int] | float] | None = None
             if candidate_x is not None and candidate_cost is not None:
+                (
+                    selection_x,
+                    selection_cost,
+                    selection_context,
+                    selection_m,
+                    selection_s,
+                    selection_metadata,
+                    candidate_cap_info,
+                ) = self._cap_candidate_pool(
+                    variant,
+                    candidate_x=candidate_x,
+                    candidate_cost=candidate_cost,
+                    candidate_context=candidate_context,
+                    candidate_M=candidate_M,
+                    candidate_S=candidate_S,
+                    candidate_sensor_metadata=candidate_sensor_metadata,
+                )
+                if on_variant_progress is not None:
+                    on_variant_progress(
+                        variant_name,
+                        "selection_start",
+                        candidate_cap_info,
+                    )
                 selection = variant.select_sensors(
-                    candidate_x,
-                    candidate_cost,
-                    context=candidate_context,
-                    M=candidate_M,
-                    S=candidate_S,
-                    sensor_metadata=candidate_sensor_metadata,
+                    selection_x,
+                    selection_cost,
+                    context=selection_context,
+                    M=selection_m,
+                    S=selection_s,
+                    sensor_metadata=selection_metadata,
                     budget=budget,
                     max_selections=max_selections,
                     batch_size=batch_size,
                 )
+                if on_variant_progress is not None:
+                    on_variant_progress(
+                        variant_name,
+                        "selection_complete",
+                        {
+                            "selected": len(selection.get("selected_indices", [])),
+                            "planning_strategy": variant.config.policy.planning_strategy,
+                        },
+                    )
             report = variant.ablation_report()
+            report["ablation_evaluation"] = evaluation_cap_info
             report["fit_summary"] = {
                 "state_epochs": len(fit_summary.state_history.get("loss", [])),
                 "observation_steps": (
@@ -1627,6 +2049,7 @@ class ResearchExperimentRunner:
                     checkpoint_path,
                     stage="fit_complete",
                     pipeline=pipeline,
+                    include_pipeline_state=True,
                     fit_summary=fit_summary,
                     dataset_summary=dataset_summary,
                     runtime_environment=runtime_environment,
@@ -1634,28 +2057,15 @@ class ResearchExperimentRunner:
                 )
 
             evaluation_s = prepared.evaluation.S
-            if pipeline.config.use_m2 and evaluation_s is not None and torch.count_nonzero(evaluation_s).item() == 0:
-                self._append_heartbeat(
-                    heartbeat_path,
-                    stage="evaluating_base_pipeline",
-                    step="evaluation_silence_start",
-                    payload={"rows": int(prepared.evaluation.X.shape[0])},
-                )
-                evaluation_s = pipeline.detect_silence(
-                    prepared.evaluation.X,
-                    prepared.evaluation.y,
-                    context=prepared.evaluation.context,
-                    sensor_metadata=prepared.evaluation.sensor_metadata,
-                    batch_size=inference_batch_size,
-                )["dynamic_silence"].float()
-                self._append_heartbeat(
-                    heartbeat_path,
-                    stage="evaluating_base_pipeline",
-                    step="evaluation_silence_complete",
-                    payload={"flagged": int(evaluation_s.sum().item())},
-                )
 
             if base_metrics is None:
+                evaluation_s = self._ensure_dynamic_silence(
+                    pipeline,
+                    prepared.evaluation,
+                    batch_size=inference_batch_size,
+                    heartbeat_path=heartbeat_path,
+                    stage="evaluating_base_pipeline",
+                )
                 self._write_progress_payload(
                     path=progress_path,
                     summary_path=output_path,
@@ -1699,10 +2109,22 @@ class ResearchExperimentRunner:
                     step="persist_base_metrics",
                     payload={"metric_keys": sorted(base_metrics.keys())},
                 )
+                self._write_progress_payload(
+                    path=progress_path,
+                    summary_path=output_path,
+                    status="running",
+                    stage="base_metrics_complete",
+                    runtime_environment=runtime_environment,
+                    reproducibility=reproducibility,
+                    dataset_summary=dataset_summary,
+                    fit_summary=fit_summary,
+                    base_metrics=base_metrics,
+                )
                 self._save_checkpoint(
                     checkpoint_path,
                     stage="base_metrics_complete",
                     pipeline=pipeline,
+                    include_pipeline_state=False,
                     fit_summary=fit_summary,
                     base_metrics=base_metrics,
                     dataset_summary=dataset_summary,
@@ -1739,6 +2161,7 @@ class ResearchExperimentRunner:
                     checkpoint_path,
                     stage="selection_complete",
                     pipeline=pipeline,
+                    include_pipeline_state=False,
                     fit_summary=fit_summary,
                     base_metrics=base_metrics,
                     selection=selection,
@@ -1797,6 +2220,7 @@ class ResearchExperimentRunner:
                         checkpoint_path,
                         stage="ablations_in_progress",
                         pipeline=pipeline,
+                        include_pipeline_state=False,
                         fit_summary=fit_summary,
                         base_metrics=base_metrics,
                         ablations=results,
@@ -1819,9 +2243,50 @@ class ResearchExperimentRunner:
                         selection=selection,
                     ),
                 ),
+                on_variant_progress=lambda name, step, payload: self._append_heartbeat(
+                    heartbeat_path,
+                    stage="running_ablations",
+                    step=f"{name}:{step}",
+                    payload=payload,
+                ),
             )
 
             if pipeline.use_m3 and not sensitivity:
+                (
+                    sensitivity_x,
+                    sensitivity_y,
+                    sensitivity_context,
+                    sensitivity_m,
+                    sensitivity_s,
+                    sensitivity_metadata,
+                    sensitivity_batch_size,
+                    sensitivity_cap_info,
+                ) = self._cap_sensitivity_evaluation(
+                    prepared,
+                    batch_size=inference_batch_size,
+                )
+                sensitivity_batch = TensorBatch(
+                    X=sensitivity_x,
+                    y=sensitivity_y,
+                    context=sensitivity_context,
+                    M=sensitivity_m,
+                    S=sensitivity_s,
+                    missing_indicator=sensitivity_m if sensitivity_m is not None else torch.zeros_like(sensitivity_y),
+                    cost=None,
+                    sensor_metadata=(
+                        sensitivity_metadata
+                        if isinstance(sensitivity_metadata, SensorMetadataBatch)
+                        else prepared.evaluation.sensor_metadata
+                    ),
+                    indices=torch.arange(sensitivity_x.shape[0], dtype=torch.long, device=sensitivity_x.device),
+                )
+                evaluation_s = self._ensure_dynamic_silence(
+                    pipeline,
+                    sensitivity_batch,
+                    batch_size=sensitivity_batch_size,
+                    heartbeat_path=heartbeat_path,
+                    stage="running_sensitivity",
+                )
                 self._write_progress_payload(
                     path=progress_path,
                     summary_path=output_path,
@@ -1835,20 +2300,39 @@ class ResearchExperimentRunner:
                     ablations=ablations,
                     selection=selection,
                 )
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="running_sensitivity",
+                    step="dispatch",
+                    payload=sensitivity_cap_info,
+                )
                 sensitivity = pipeline.run_missingness_sensitivity_analysis(
-                    prepared.evaluation.X,
-                    prepared.evaluation.y,
+                    sensitivity_x,
+                    sensitivity_y,
                     logit_scales=list(self.run_config.sensitivity_logit_scales),
-                    context=prepared.evaluation.context,
-                    M=prepared.evaluation.M,
+                    context=sensitivity_context,
+                    M=sensitivity_m,
                     S=evaluation_s,
-                    sensor_metadata=prepared.evaluation.sensor_metadata,
-                    batch_size=inference_batch_size,
+                    sensor_metadata=sensitivity_batch.sensor_metadata,
+                    batch_size=sensitivity_batch_size,
+                    progress_callback=lambda step, payload: self._append_heartbeat(
+                        heartbeat_path,
+                        stage="running_sensitivity",
+                        step=step,
+                        payload=payload,
+                    ),
+                )
+                self._append_heartbeat(
+                    heartbeat_path,
+                    stage="running_sensitivity",
+                    step="persist_sensitivity",
+                    payload={"keys": sorted(sensitivity.keys())},
                 )
                 self._save_checkpoint(
                     checkpoint_path,
                     stage="sensitivity_complete",
                     pipeline=pipeline,
+                    include_pipeline_state=False,
                     fit_summary=fit_summary,
                     base_metrics=base_metrics,
                     ablations=ablations,
@@ -1874,7 +2358,16 @@ class ResearchExperimentRunner:
                     sensitivity=sensitivity,
                     selection=selection,
                 )
-                benchmark = self._run_large_scale_benchmark(pipeline, prepared)
+                benchmark = self._run_large_scale_benchmark(
+                    pipeline,
+                    prepared,
+                    progress_callback=lambda step, payload: self._append_heartbeat(
+                        heartbeat_path,
+                        stage="running_benchmark",
+                        step=step,
+                        payload=payload,
+                    ),
+                )
 
             result = ExperimentResult(
                 fit_summary=fit_summary,
@@ -1891,6 +2384,7 @@ class ResearchExperimentRunner:
                 checkpoint_path,
                 stage="completed",
                 pipeline=pipeline,
+                include_pipeline_state=False,
                 fit_summary=fit_summary,
                 base_metrics=base_metrics,
                 ablations=ablations,

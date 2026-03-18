@@ -2280,6 +2280,7 @@ class SilenceAwareIDS(nn.Module):
         S: Tensor | None = None,
         sensor_metadata: SensorMetadataBatch | Mapping[str, Tensor] | None = None,
         batch_size: int | None = None,
+        progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> dict[str, dict[str, float]]:
         """Evaluate predictive metrics under varying MNAR-strength assumptions.
 
@@ -2298,6 +2299,7 @@ class SilenceAwareIDS(nn.Module):
         results: dict[str, dict[str, float]] = {}
         for scale in logit_scales:
             key = f"logit_scale_{scale:.3f}"
+            _emit_progress_event(progress_callback, "scale_start", key=key, scale=float(scale))
             results[key] = self.evaluate_predictions(
                 X,
                 y,
@@ -2308,6 +2310,22 @@ class SilenceAwareIDS(nn.Module):
                 integrate_missingness=self.use_m3,
                 logit_scale=scale,
                 batch_size=batch_size,
+                progress_callback=(
+                    None
+                    if progress_callback is None
+                    else lambda step, payload, prefix=key: _emit_progress_event(
+                        progress_callback,
+                        f"{prefix}::{step}",
+                        **payload,
+                    )
+                ),
+            )
+            _emit_progress_event(
+                progress_callback,
+                "scale_complete",
+                key=key,
+                rmse=float(results[key].get("rmse", 0.0)),
+                crps=float(results[key].get("crps", 0.0)),
             )
         return results
 
@@ -2323,6 +2341,7 @@ class SilenceAwareIDS(nn.Module):
         adaptive_reliability = replace(base.reliability, mode="adaptive")
         relational_reliability = replace(base.reliability, mode="relational_adaptive")
         graph_reliability = replace(base.reliability, mode="graph_corel")
+        policy_reliability = base.reliability if base.reliability.mode != "graph_corel" else graph_reliability
         myopic_policy = replace(base.policy, planning_strategy="lazy_greedy")
         rollout_policy = replace(base.policy, planning_strategy="non_myopic_rollout")
         ppo_warm_policy = replace(base.policy, planning_strategy="ppo_warmstart")
@@ -2446,7 +2465,7 @@ class SilenceAwareIDS(nn.Module):
                 missingness=replace(generative_missingness, mode="selection"),
                 policy=ppo_warm_policy,
                 state_training=generative_state,
-                reliability=graph_reliability,
+                reliability=policy_reliability,
             ),
             "full_model": replace(
                 base,
@@ -2458,7 +2477,7 @@ class SilenceAwareIDS(nn.Module):
                 missingness=replace(generative_missingness, mode="selection"),
                 policy=ppo_online_policy,
                 state_training=generative_state,
-                reliability=graph_reliability,
+                reliability=policy_reliability,
             ),
             "gp_plus_pattern_mixture_missingness": replace(
                 base,
@@ -2481,7 +2500,7 @@ class SilenceAwareIDS(nn.Module):
                 missingness=replace(generative_missingness, mode="selection"),
                 policy=myopic_policy,
                 state_training=generative_state,
-                reliability=graph_reliability,
+                reliability=policy_reliability,
             ),
             "rollout_policy_baseline": replace(
                 base,
@@ -2493,7 +2512,7 @@ class SilenceAwareIDS(nn.Module):
                 missingness=replace(generative_missingness, mode="selection"),
                 policy=rollout_policy,
                 state_training=generative_state,
-                reliability=graph_reliability,
+                reliability=policy_reliability,
             ),
             "variance_policy_baseline": replace(
                 base,
@@ -2505,7 +2524,7 @@ class SilenceAwareIDS(nn.Module):
                 missingness=replace(generative_missingness, mode="selection"),
                 policy=replace(myopic_policy, utility_surrogate="variance"),
                 state_training=generative_state,
-                reliability=graph_reliability,
+                reliability=policy_reliability,
             ),
         }
 

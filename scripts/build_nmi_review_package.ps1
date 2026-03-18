@@ -1,5 +1,5 @@
 param(
-    [string]$PackageName = "saids-nmi-paper-materials-slim-20260317.zip"
+    [string]$PackageName = "saids-nmi-paper-materials-slim-20260318.zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +9,7 @@ $distDir = Join-Path $root "dist"
 $stageName = [System.IO.Path]::GetFileNameWithoutExtension($PackageName)
 $stageDir = Join-Path $distDir $stageName
 $zipPath = Join-Path $distDir $PackageName
-$reviewSummaryPath = Join-Path $root "review\NMI_PACKAGE_SUMMARY_20260317.md"
+$reviewSummaryPath = Join-Path $root "review\NMI_PACKAGE_SUMMARY_20260318.md"
 
 function Copy-RelativePath {
     param(
@@ -83,6 +83,9 @@ $topLevelFiles = @(
     "benchmark_joint_q1_medium.json",
     "benchmark_joint_q1_large.json",
     "benchmark_korea_noaa_q1_medium.json",
+    "benchmark_taiwan_q1_pilot.json",
+    "benchmark_korea_noaa_q2_safe.json",
+    "benchmark_korea_noaa_q3_safe.json",
     "benchmark_japan_q1_medium.json",
     "benchmark_china_q1_medium.json",
     "benchmark_us_q1_medium.json"
@@ -91,18 +94,22 @@ $topLevelFiles = @(
 $directories = @(
     "task_cli",
     "scripts",
-    "tests"
+    "tests",
+    "reports\nmi_figures_20260318"
 )
 
 $reviewFiles = @(
     "review\REVIEW_SUMMARY.md",
     "review\NMI_UPDATE_GAP_ANALYSIS_20260317.md",
+    "review\NMI_CLAIM_POSITIONING_20260317.md",
+    "review\REMAINING_EXPERIMENTS_20260317.md",
     "review\NMI_BENCHMARK_COMPARISON_20260317.csv",
     "review\NMI_BENCHMARK_COMPARISON_20260317.json",
     "review\NMI_BENCHMARK_COMPARISON_20260317.md",
     "review\nmi_section_revision_instructions_extracted.txt",
     "review\pre_submission_feedback_analysis_extracted.txt",
-    "review\saids_nmi_rewritten_from_feedback_extracted.txt"
+    "review\saids_nmi_rewritten_from_feedback_extracted.txt",
+    "review\canonical_paper_materials_20260317"
 )
 
 $dataFiles = @(
@@ -120,9 +127,26 @@ $dataFiles = @(
     "data\noaa_isd_china_q1_2025\noaa_download_manifest.json",
     "data\noaa_isd_us_q1_2025\framework_isd_q1.json",
     "data\noaa_isd_us_q1_2025\noaa_download_manifest.json",
+    "data\noaa_isd_taiwan_q1_2025\framework_isd_q1.json",
+    "data\noaa_isd_taiwan_q1_2025\noaa_download_manifest.json",
+    "data\noaa_isd_korea_q2_2025\framework_isd_q2.json",
+    "data\noaa_isd_korea_q2_2025\noaa_download_manifest.json",
+    "data\noaa_isd_korea_q3_2025\framework_isd_q3.json",
+    "data\noaa_isd_korea_q3_2025\noaa_download_manifest.json",
     "data\event_truth_q1_2025\kma_event_manifest.json",
     "data\event_truth_q1_2025_station\station_event_truth_q1.csv",
-    "data\qc_maintenance_metadata_q1_2025\q1_operational_qc_summary.csv"
+    "data\event_truth_recent_snapshot_20260317\warning_now_snapshot_standardized.csv",
+    "data\qc_maintenance_metadata_q1_2025\q1_operational_qc_summary.csv",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\summary.json",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\framework_progress.json",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\framework_heartbeat.jsonl",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\report.md",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\ablations.csv",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\selection.csv",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\sensitivity.csv",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\framework_base_metrics_recovery.json",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\framework_base_metrics_collected.json",
+    "data\joint_weather_network_q1_2025\outputs\framework_joint_run\collect_framework_base_metrics_progress.jsonl"
 )
 
 $benchmarkNames = @(
@@ -130,6 +154,9 @@ $benchmarkNames = @(
     "benchmark_joint_q1_medium",
     "benchmark_joint_q1_large",
     "benchmark_korea_noaa_q1_medium",
+    "benchmark_taiwan_q1_pilot",
+    "benchmark_korea_noaa_q2_safe",
+    "benchmark_korea_noaa_q3_safe",
     "benchmark_japan_q1_medium",
     "benchmark_china_q1_medium",
     "benchmark_us_q1_medium"
@@ -139,26 +166,38 @@ $summaryContent = @"
 # NMI Package Summary
 
 This bundle contains the current manuscript-facing code, benchmark configs,
-review notes, and completed benchmark outputs without raw observation archives.
+review notes, canonical paper-facing summaries, updated benchmark outputs,
+and the completed full framework-run summary/report state without raw observation archives.
 
 ## Included benchmark result sets
 - benchmark_joint_q1
 - benchmark_joint_q1_medium
 - benchmark_joint_q1_large
 - benchmark_korea_noaa_q1_medium
+- benchmark_taiwan_q1_pilot
+- benchmark_korea_noaa_q2_safe
+- benchmark_korea_noaa_q3_safe
 - benchmark_japan_q1_medium
 - benchmark_china_q1_medium
 - benchmark_us_q1_medium
 
-## Included comparison artifact
+## Included paper-facing artifact
+- review/canonical_paper_materials_20260317/
+- reports/nmi_figures_20260318/
 - review/NMI_BENCHMARK_COMPARISON_20260317.md
-- review/NMI_BENCHMARK_COMPARISON_20260317.csv
-- review/NMI_BENCHMARK_COMPARISON_20260317.json
+- review/NMI_CLAIM_POSITIONING_20260317.md
+- review/REMAINING_EXPERIMENTS_20260317.md
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/summary.json
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/framework_progress.json
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/report.md
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/ablations.csv
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/selection.csv
+- data/joint_weather_network_q1_2025/outputs/framework_joint_run/sensitivity.csv
 
 ## Excluded from the package
 - Raw AWS/ASOS/NOAA/ERA5 CSV and NetCDF files
 - Virtual environments and caches
-- Detached run heartbeats, cache blobs, and temporary folders
+- Checkpoint binaries, cache blobs, and temporary folders
 "@
 
 $summaryParent = Split-Path -Parent $reviewSummaryPath
@@ -179,7 +218,7 @@ foreach ($relativePath in $reviewFiles) {
     Copy-RelativePath $relativePath
 }
 
-Copy-RelativePath "review\NMI_PACKAGE_SUMMARY_20260317.md"
+Copy-RelativePath "review\NMI_PACKAGE_SUMMARY_20260318.md"
 
 foreach ($relativePath in $dataFiles) {
     Copy-RelativePath $relativePath

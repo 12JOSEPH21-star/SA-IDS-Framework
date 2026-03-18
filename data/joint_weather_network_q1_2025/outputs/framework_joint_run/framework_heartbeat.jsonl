@@ -1,0 +1,231 @@
+{"timestamp": "2026-03-17T00:33:04", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-17T00:33:14", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T00:33:14", "stage": "evaluating_base_pipeline", "step": "dispatch", "payload": {"rows": 32768, "batch_size": 128, "use_m3": true, "use_m5": true}}
+{"timestamp": "2026-03-17T00:33:14", "stage": "evaluating_base_pipeline", "step": "start", "payload": {"input_rows": 32768, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T00:33:14", "stage": "evaluating_base_pipeline", "step": "observed_subset_ready", "payload": {"observed_rows": 32768}}
+{"timestamp": "2026-03-17T00:33:14", "stage": "evaluating_base_pipeline", "step": "predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-17T00:33:28", "stage": "evaluating_base_pipeline", "step": "predictive_summary_complete", "payload": {"mean_variance": 45.224449157714844, "mean_missingness": 0.00019518805493135005}}
+{"timestamp": "2026-03-17T00:33:28", "stage": "evaluating_base_pipeline", "step": "silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-17T00:33:38", "stage": "evaluating_base_pipeline", "step": "silence_detection_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T00:33:38", "stage": "evaluating_base_pipeline", "step": "relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T00:33:38", "stage": "evaluating_base_pipeline", "step": "relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-17T00:33:38", "stage": "evaluating_base_pipeline", "step": "intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T00:41:20", "stage": "evaluating_base_pipeline", "step": "intervals_complete", "payload": {"covered_rows": 32768, "interval_width": 26.55447006225586}}
+{"timestamp": "2026-03-17T00:41:20", "stage": "evaluating_base_pipeline", "step": "metrics_start", "payload": {}}
+{"timestamp": "2026-03-17T00:41:20", "stage": "evaluating_base_pipeline", "step": "metrics_complete", "payload": {"rmse": 10.58402156829834, "crps": 4.390200138092041, "coverage": 0.86578369140625}}
+{"timestamp": "2026-03-17T00:41:20", "stage": "evaluating_base_pipeline", "step": "completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-17T20:48:19", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-17T20:48:30", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T20:48:30", "stage": "evaluating_base_pipeline", "step": "dispatch", "payload": {"rows": 32768, "batch_size": 128, "use_m3": true, "use_m5": true}}
+{"timestamp": "2026-03-17T20:48:30", "stage": "evaluating_base_pipeline", "step": "start", "payload": {"input_rows": 32768, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T20:48:30", "stage": "evaluating_base_pipeline", "step": "observed_subset_ready", "payload": {"observed_rows": 32768}}
+{"timestamp": "2026-03-17T20:48:30", "stage": "evaluating_base_pipeline", "step": "predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-17T20:48:43", "stage": "evaluating_base_pipeline", "step": "predictive_summary_complete", "payload": {"mean_variance": 45.224449157714844, "mean_missingness": 0.00019518805493135005}}
+{"timestamp": "2026-03-17T20:48:43", "stage": "evaluating_base_pipeline", "step": "silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-17T20:48:54", "stage": "evaluating_base_pipeline", "step": "silence_detection_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T20:48:54", "stage": "evaluating_base_pipeline", "step": "relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T20:48:54", "stage": "evaluating_base_pipeline", "step": "relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-17T20:48:54", "stage": "evaluating_base_pipeline", "step": "intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:00:11", "stage": "evaluating_base_pipeline", "step": "intervals_complete", "payload": {"covered_rows": 32768, "interval_width": 26.55447006225586}}
+{"timestamp": "2026-03-17T21:00:11", "stage": "evaluating_base_pipeline", "step": "metrics_start", "payload": {}}
+{"timestamp": "2026-03-17T21:00:11", "stage": "evaluating_base_pipeline", "step": "metrics_complete", "payload": {"rmse": 10.58402156829834, "crps": 4.390200138092041, "coverage": 0.86578369140625}}
+{"timestamp": "2026-03-17T21:00:11", "stage": "evaluating_base_pipeline", "step": "completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-17T21:03:55", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-17T21:04:05", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T21:04:05", "stage": "evaluating_base_pipeline", "step": "dispatch", "payload": {"rows": 32768, "batch_size": 128, "use_m3": true, "use_m5": true}}
+{"timestamp": "2026-03-17T21:04:05", "stage": "evaluating_base_pipeline", "step": "start", "payload": {"input_rows": 32768, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:04:05", "stage": "evaluating_base_pipeline", "step": "observed_subset_ready", "payload": {"observed_rows": 32768}}
+{"timestamp": "2026-03-17T21:04:05", "stage": "evaluating_base_pipeline", "step": "predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-17T21:04:17", "stage": "evaluating_base_pipeline", "step": "predictive_summary_complete", "payload": {"mean_variance": 45.224449157714844, "mean_missingness": 0.00019518805493135005}}
+{"timestamp": "2026-03-17T21:04:17", "stage": "evaluating_base_pipeline", "step": "silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-17T21:04:27", "stage": "evaluating_base_pipeline", "step": "silence_detection_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T21:04:27", "stage": "evaluating_base_pipeline", "step": "relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:04:27", "stage": "evaluating_base_pipeline", "step": "relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-17T21:04:27", "stage": "evaluating_base_pipeline", "step": "intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:12:52", "stage": "evaluating_base_pipeline", "step": "intervals_complete", "payload": {"covered_rows": 32768, "interval_width": 26.55447006225586}}
+{"timestamp": "2026-03-17T21:12:52", "stage": "evaluating_base_pipeline", "step": "metrics_start", "payload": {}}
+{"timestamp": "2026-03-17T21:12:52", "stage": "evaluating_base_pipeline", "step": "metrics_complete", "payload": {"rmse": 10.58402156829834, "crps": 4.390200138092041, "coverage": 0.86578369140625}}
+{"timestamp": "2026-03-17T21:12:52", "stage": "evaluating_base_pipeline", "step": "completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-17T21:51:11", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-17T21:51:21", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T01:19:27", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T01:19:37", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T02:46:34", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T02:46:45", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T05:14:25", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T05:14:35", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T05:14:35", "stage": "running_ablations", "step": "myopic_policy_baseline:fit_start", "payload": {}}
+{"timestamp": "2026-03-18T05:23:15", "stage": "running_ablations", "step": "myopic_policy_baseline:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T05:23:15", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate_start", "payload": {}}
+{"timestamp": "2026-03-18T05:51:09", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T05:51:19", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T05:51:19", "stage": "running_ablations", "step": "myopic_policy_baseline:fit_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T05:59:44", "stage": "running_ablations", "step": "myopic_policy_baseline:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T05:59:44", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T05:59:44", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::start", "payload": {"input_rows": 4096, "batch_size": 64, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T05:59:44", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::observed_subset_ready", "payload": {"observed_rows": 4096}}
+{"timestamp": "2026-03-18T05:59:44", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T05:59:46", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::predictive_summary_complete", "payload": {"mean_variance": 2.3243160247802734, "mean_missingness": 0.00015932419046293944}}
+{"timestamp": "2026-03-18T05:59:46", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T05:59:48", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::silence_detection_complete", "payload": {"flagged": 4096}}
+{"timestamp": "2026-03-18T05:59:48", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T05:59:48", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T05:59:48", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::intervals_complete", "payload": {"covered_rows": 4096, "interval_width": 9.775826454162598}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::metrics_complete", "payload": {"rmse": 8.038019180297852, "crps": 2.5819501876831055, "coverage": 0.867919921875}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:evaluate_complete", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy", "rmse": 8.038019180297852, "crps": 2.5819501876831055}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:selection_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "myopic_policy_baseline:selection_complete", "payload": {"selected": 3, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:00:17", "stage": "running_ablations", "step": "ppo_warmstart_baseline:fit_start", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_warmstart"}}
+{"timestamp": "2026-03-18T06:08:25", "stage": "running_ablations", "step": "ppo_warmstart_baseline:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T06:08:25", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate_start", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_warmstart"}}
+{"timestamp": "2026-03-18T06:08:25", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::start", "payload": {"input_rows": 2048, "batch_size": 64, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:08:25", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::observed_subset_ready", "payload": {"observed_rows": 2048}}
+{"timestamp": "2026-03-18T06:08:25", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::predictive_summary_complete", "payload": {"mean_variance": 51.28369903564453, "mean_missingness": 0.00011224709305679426}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::silence_detection_complete", "payload": {"flagged": 2048}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T06:08:26", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::intervals_complete", "payload": {"covered_rows": 2048, "interval_width": 21.779531478881836}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::metrics_complete", "payload": {"rmse": 8.396910667419434, "crps": 3.928145170211792, "coverage": 0.87451171875}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:evaluate_complete", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_warmstart", "rmse": 8.396910667419434, "crps": 3.928145170211792}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:selection_start", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "planning_strategy": "ppo_warmstart"}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "ppo_warmstart_baseline:selection_complete", "payload": {"selected": 3, "planning_strategy": "ppo_warmstart"}}
+{"timestamp": "2026-03-18T06:08:40", "stage": "running_ablations", "step": "rollout_policy_baseline:fit_start", "payload": {"applied": true, "limit": 3072, "original_rows": 32768, "effective_rows": 3072, "evaluation_batch_size": 64, "planning_strategy": "non_myopic_rollout"}}
+{"timestamp": "2026-03-18T06:16:46", "stage": "running_ablations", "step": "rollout_policy_baseline:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T06:16:46", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate_start", "payload": {"applied": true, "limit": 3072, "original_rows": 32768, "effective_rows": 3072, "evaluation_batch_size": 64, "planning_strategy": "non_myopic_rollout"}}
+{"timestamp": "2026-03-18T06:16:46", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::start", "payload": {"input_rows": 3072, "batch_size": 64, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:16:46", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::observed_subset_ready", "payload": {"observed_rows": 3072}}
+{"timestamp": "2026-03-18T06:16:46", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T06:16:48", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::predictive_summary_complete", "payload": {"mean_variance": 54.6988525390625, "mean_missingness": 0.00027591909747570753}}
+{"timestamp": "2026-03-18T06:16:48", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T06:16:49", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::silence_detection_complete", "payload": {"flagged": 3072}}
+{"timestamp": "2026-03-18T06:16:49", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:16:49", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T06:16:49", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::intervals_complete", "payload": {"covered_rows": 3072, "interval_width": 20.180286407470703}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::metrics_complete", "payload": {"rmse": 10.996949195861816, "crps": 4.2173848152160645, "coverage": 0.8733723759651184}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:evaluate_complete", "payload": {"applied": true, "limit": 3072, "original_rows": 32768, "effective_rows": 3072, "evaluation_batch_size": 64, "planning_strategy": "non_myopic_rollout", "rmse": 10.996949195861816, "crps": 4.2173848152160645}}
+{"timestamp": "2026-03-18T06:17:10", "stage": "running_ablations", "step": "rollout_policy_baseline:selection_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "planning_strategy": "non_myopic_rollout"}}
+{"timestamp": "2026-03-18T06:17:11", "stage": "running_ablations", "step": "rollout_policy_baseline:selection_complete", "payload": {"selected": 3, "planning_strategy": "non_myopic_rollout"}}
+{"timestamp": "2026-03-18T06:17:11", "stage": "running_ablations", "step": "variance_policy_baseline:fit_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:25:18", "stage": "running_ablations", "step": "variance_policy_baseline:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T06:25:18", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:25:18", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::start", "payload": {"input_rows": 4096, "batch_size": 64, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:25:18", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::observed_subset_ready", "payload": {"observed_rows": 4096}}
+{"timestamp": "2026-03-18T06:25:18", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T06:25:20", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::predictive_summary_complete", "payload": {"mean_variance": 4.659887790679932, "mean_missingness": 0.00013533538731280714}}
+{"timestamp": "2026-03-18T06:25:20", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T06:25:21", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::silence_detection_complete", "payload": {"flagged": 4096}}
+{"timestamp": "2026-03-18T06:25:21", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:25:21", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T06:25:21", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::intervals_complete", "payload": {"covered_rows": 4096, "interval_width": 14.133176803588867}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::metrics_complete", "payload": {"rmse": 8.710785865783691, "crps": 2.898465871810913, "coverage": 0.87109375}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:evaluate_complete", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "evaluation_batch_size": 64, "planning_strategy": "lazy_greedy", "rmse": 8.710785865783691, "crps": 2.898465871810913}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:selection_start", "payload": {"applied": true, "limit": 4096, "original_rows": 32768, "effective_rows": 4096, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "variance_policy_baseline:selection_complete", "payload": {"selected": 3, "planning_strategy": "lazy_greedy"}}
+{"timestamp": "2026-03-18T06:25:50", "stage": "running_ablations", "step": "full_model:fit_start", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_online"}}
+{"timestamp": "2026-03-18T06:34:35", "stage": "running_ablations", "step": "full_model:fit_complete", "payload": {"state_epochs": 5, "missingness_epochs": 5}}
+{"timestamp": "2026-03-18T06:34:35", "stage": "running_ablations", "step": "full_model:evaluate_start", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_online"}}
+{"timestamp": "2026-03-18T06:34:35", "stage": "running_ablations", "step": "full_model:evaluate::start", "payload": {"input_rows": 2048, "batch_size": 64, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:34:35", "stage": "running_ablations", "step": "full_model:evaluate::observed_subset_ready", "payload": {"observed_rows": 2048}}
+{"timestamp": "2026-03-18T06:34:35", "stage": "running_ablations", "step": "full_model:evaluate::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T06:34:36", "stage": "running_ablations", "step": "full_model:evaluate::predictive_summary_complete", "payload": {"mean_variance": 0.6984142661094666, "mean_missingness": 0.00010845858923858032}}
+{"timestamp": "2026-03-18T06:34:36", "stage": "running_ablations", "step": "full_model:evaluate::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T06:34:37", "stage": "running_ablations", "step": "full_model:evaluate::silence_detection_complete", "payload": {"flagged": 2048}}
+{"timestamp": "2026-03-18T06:34:37", "stage": "running_ablations", "step": "full_model:evaluate::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:34:37", "stage": "running_ablations", "step": "full_model:evaluate::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T06:34:37", "stage": "running_ablations", "step": "full_model:evaluate::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:evaluate::intervals_complete", "payload": {"covered_rows": 2048, "interval_width": 9.690152168273926}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:evaluate::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:evaluate::metrics_complete", "payload": {"rmse": 5.570463180541992, "crps": 1.8435118198394775, "coverage": 0.86767578125}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:evaluate::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:evaluate_complete", "payload": {"applied": true, "limit": 2048, "original_rows": 32768, "effective_rows": 2048, "evaluation_batch_size": 64, "planning_strategy": "ppo_online", "rmse": 5.570463180541992, "crps": 1.8435118198394775}}
+{"timestamp": "2026-03-18T06:34:52", "stage": "running_ablations", "step": "full_model:selection_start", "payload": {"applied": true, "limit": 1024, "original_rows": 32768, "effective_rows": 1024, "planning_strategy": "ppo_online"}}
+{"timestamp": "2026-03-18T06:34:54", "stage": "running_ablations", "step": "full_model:selection_complete", "payload": {"selected": 3, "planning_strategy": "ppo_online"}}
+{"timestamp": "2026-03-18T07:26:20", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T07:26:30", "stage": "evaluating_base_pipeline", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T08:22:44", "stage": "running_sensitivity", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T08:22:54", "stage": "running_sensitivity", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T11:09:42", "stage": "running_sensitivity", "step": "evaluation_silence_start", "payload": {"rows": 32768}}
+{"timestamp": "2026-03-18T11:09:52", "stage": "running_sensitivity", "step": "evaluation_silence_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-18T12:03:48", "stage": "running_sensitivity", "step": "evaluation_silence_start", "payload": {"rows": 8192}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "evaluation_silence_complete", "payload": {"flagged": 8192}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "dispatch", "payload": {"applied": true, "limit": 8192, "original_rows": 32768, "effective_rows": 8192, "evaluation_batch_size": 128}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "scale_start", "payload": {"key": "logit_scale_0.500", "scale": 0.5}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "logit_scale_0.500::start", "payload": {"input_rows": 8192, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "logit_scale_0.500::observed_subset_ready", "payload": {"observed_rows": 8192}}
+{"timestamp": "2026-03-18T12:03:50", "stage": "running_sensitivity", "step": "logit_scale_0.500::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T12:03:53", "stage": "running_sensitivity", "step": "logit_scale_0.500::predictive_summary_complete", "payload": {"mean_variance": 45.55506896972656, "mean_missingness": 0.006317272316664457}}
+{"timestamp": "2026-03-18T12:03:53", "stage": "running_sensitivity", "step": "logit_scale_0.500::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T12:03:56", "stage": "running_sensitivity", "step": "logit_scale_0.500::silence_detection_complete", "payload": {"flagged": 8192}}
+{"timestamp": "2026-03-18T12:03:56", "stage": "running_sensitivity", "step": "logit_scale_0.500::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:03:56", "stage": "running_sensitivity", "step": "logit_scale_0.500::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T12:03:56", "stage": "running_sensitivity", "step": "logit_scale_0.500::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_0.500::intervals_complete", "payload": {"covered_rows": 8192, "interval_width": 26.04294776916504}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_0.500::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_0.500::metrics_complete", "payload": {"rmse": 10.377396583557129, "crps": 4.358961582183838, "coverage": 0.8665771484375}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_0.500::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "scale_complete", "payload": {"key": "logit_scale_0.500", "rmse": 10.377396583557129, "crps": 4.358961582183838}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "scale_start", "payload": {"key": "logit_scale_1.000", "scale": 1.0}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_1.000::start", "payload": {"input_rows": 8192, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_1.000::observed_subset_ready", "payload": {"observed_rows": 8192}}
+{"timestamp": "2026-03-18T12:04:54", "stage": "running_sensitivity", "step": "logit_scale_1.000::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T12:04:57", "stage": "running_sensitivity", "step": "logit_scale_1.000::predictive_summary_complete", "payload": {"mean_variance": 45.24225997924805, "mean_missingness": 0.00011099981929874048}}
+{"timestamp": "2026-03-18T12:04:57", "stage": "running_sensitivity", "step": "logit_scale_1.000::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T12:04:59", "stage": "running_sensitivity", "step": "logit_scale_1.000::silence_detection_complete", "payload": {"flagged": 8192}}
+{"timestamp": "2026-03-18T12:04:59", "stage": "running_sensitivity", "step": "logit_scale_1.000::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:04:59", "stage": "running_sensitivity", "step": "logit_scale_1.000::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T12:04:59", "stage": "running_sensitivity", "step": "logit_scale_1.000::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.000::intervals_complete", "payload": {"covered_rows": 8192, "interval_width": 25.95553970336914}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.000::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.000::metrics_complete", "payload": {"rmse": 10.373059272766113, "crps": 4.352097511291504, "coverage": 0.8665771484375}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.000::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "scale_complete", "payload": {"key": "logit_scale_1.000", "rmse": 10.373059272766113, "crps": 4.352097511291504}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "scale_start", "payload": {"key": "logit_scale_1.500", "scale": 1.5}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.500::start", "payload": {"input_rows": 8192, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.500::observed_subset_ready", "payload": {"observed_rows": 8192}}
+{"timestamp": "2026-03-18T12:05:55", "stage": "running_sensitivity", "step": "logit_scale_1.500::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T12:05:58", "stage": "running_sensitivity", "step": "logit_scale_1.500::predictive_summary_complete", "payload": {"mean_variance": 45.241851806640625, "mean_missingness": 0.00010027732059825212}}
+{"timestamp": "2026-03-18T12:05:58", "stage": "running_sensitivity", "step": "logit_scale_1.500::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T12:06:01", "stage": "running_sensitivity", "step": "logit_scale_1.500::silence_detection_complete", "payload": {"flagged": 8192}}
+{"timestamp": "2026-03-18T12:06:01", "stage": "running_sensitivity", "step": "logit_scale_1.500::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:06:01", "stage": "running_sensitivity", "step": "logit_scale_1.500::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T12:06:01", "stage": "running_sensitivity", "step": "logit_scale_1.500::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:06:56", "stage": "running_sensitivity", "step": "logit_scale_1.500::intervals_complete", "payload": {"covered_rows": 8192, "interval_width": 25.95541763305664}}
+{"timestamp": "2026-03-18T12:06:56", "stage": "running_sensitivity", "step": "logit_scale_1.500::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T12:06:56", "stage": "running_sensitivity", "step": "logit_scale_1.500::metrics_complete", "payload": {"rmse": 10.373015403747559, "crps": 4.352092266082764, "coverage": 0.8665771484375}}
+{"timestamp": "2026-03-18T12:06:56", "stage": "running_sensitivity", "step": "logit_scale_1.500::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T12:06:57", "stage": "running_sensitivity", "step": "scale_complete", "payload": {"key": "logit_scale_1.500", "rmse": 10.373015403747559, "crps": 4.352092266082764}}
+{"timestamp": "2026-03-18T12:06:57", "stage": "running_sensitivity", "step": "scale_start", "payload": {"key": "logit_scale_2.000", "scale": 2.0}}
+{"timestamp": "2026-03-18T12:06:57", "stage": "running_sensitivity", "step": "logit_scale_2.000::start", "payload": {"input_rows": 8192, "batch_size": 128, "integrate_missingness": true, "reliability_mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:06:57", "stage": "running_sensitivity", "step": "logit_scale_2.000::observed_subset_ready", "payload": {"observed_rows": 8192}}
+{"timestamp": "2026-03-18T12:06:57", "stage": "running_sensitivity", "step": "logit_scale_2.000::predictive_summary_start", "payload": {}}
+{"timestamp": "2026-03-18T12:06:59", "stage": "running_sensitivity", "step": "logit_scale_2.000::predictive_summary_complete", "payload": {"mean_variance": 45.241844177246094, "mean_missingness": 0.00010000521433539689}}
+{"timestamp": "2026-03-18T12:06:59", "stage": "running_sensitivity", "step": "logit_scale_2.000::silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-18T12:07:02", "stage": "running_sensitivity", "step": "logit_scale_2.000::silence_detection_complete", "payload": {"flagged": 8192}}
+{"timestamp": "2026-03-18T12:07:02", "stage": "running_sensitivity", "step": "logit_scale_2.000::relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:07:02", "stage": "running_sensitivity", "step": "logit_scale_2.000::relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-18T12:07:02", "stage": "running_sensitivity", "step": "logit_scale_2.000::intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "logit_scale_2.000::intervals_complete", "payload": {"covered_rows": 8192, "interval_width": 25.955415725708008}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "logit_scale_2.000::metrics_start", "payload": {}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "logit_scale_2.000::metrics_complete", "payload": {"rmse": 10.373010635375977, "crps": 4.352092266082764, "coverage": 0.8665771484375}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "logit_scale_2.000::completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "scale_complete", "payload": {"key": "logit_scale_2.000", "rmse": 10.373010635375977, "crps": 4.352092266082764}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_sensitivity", "step": "persist_sensitivity", "payload": {"keys": ["logit_scale_0.500", "logit_scale_1.000", "logit_scale_1.500", "logit_scale_2.000"]}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_benchmark", "step": "benchmark_prepare_complete", "payload": {"expansion_factor": 4, "candidate_limit": 65536, "benchmark_rows": 65536, "batch_size": 512}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_benchmark", "step": "benchmark_predict_start", "payload": {"rows": 65536}}
+{"timestamp": "2026-03-18T12:07:58", "stage": "running_benchmark", "step": "benchmark_missingness_start", "payload": {"rows": 65536}}
+{"timestamp": "2026-03-18T12:07:59", "stage": "running_benchmark", "step": "benchmark_selection_start", "payload": {"rows": 65536, "max_selections": 3}}
+{"timestamp": "2026-03-18T12:08:03", "stage": "running_benchmark", "step": "benchmark_complete", "payload": {"predict_seconds": 0.5140188000004855, "missingness_seconds": 0.7148859000008088, "selection_seconds": 3.4073530999994546}}

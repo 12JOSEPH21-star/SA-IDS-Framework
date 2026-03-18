@@ -1,0 +1,129 @@
+{
+  "predictive_vs_base_gp": [],
+  "reliability_vs_conformal": [],
+  "policy_vs_random": [
+    {
+      "baseline_variant": "random",
+      "variant_name": "variance_policy_baseline",
+      "metric": "cost_normalized_gain",
+      "repeat_count": 5,
+      "effect_mean": "0.161074",
+      "effect_ci_low": "0.110057",
+      "effect_ci_high": "0.221698",
+      "p_value": "0.078125",
+      "significant": false
+    },
+    {
+      "baseline_variant": "random",
+      "variant_name": "myopic_policy_baseline",
+      "metric": "cost_normalized_gain",
+      "repeat_count": 5,
+      "effect_mean": "0.007119",
+      "effect_ci_low": "-0.002293",
+      "effect_ci_high": "0.015863",
+      "p_value": "0.261719",
+      "significant": false
+    },
+    {
+      "baseline_variant": "random",
+      "variant_name": "rollout_policy_baseline",
+      "metric": "cost_normalized_gain",
+      "repeat_count": 5,
+      "effect_mean": "0.005039",
+      "effect_ci_low": "-0.010999",
+      "effect_ci_high": "0.018467",
+      "p_value": "0.644531",
+      "significant": false
+    },
+    {
+      "baseline_variant": "random",
+      "variant_name": "ppo_warmstart_baseline",
+      "metric": "cost_normalized_gain",
+      "repeat_count": 5,
+      "effect_mean": "0.004283",
+      "effect_ci_low": "-0.010957",
+      "effect_ci_high": "0.017964",
+      "p_value": "0.699219",
+      "significant": false
+    },
+    {
+      "baseline_variant": "random",
+      "variant_name": "full_model",
+      "metric": "cost_normalized_gain",
+      "repeat_count": 5,
+      "effect_mean": "0.005563",
+      "effect_ci_low": "-0.011520",
+      "effect_ci_high": "0.016337",
+      "p_value": "0.605469",
+      "significant": false
+    }
+  ],
+  "ablation_vs_base_gp": [
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "gp_plus_dynamic_silence",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "-0.004903",
+      "effect_ci_low": "-0.013361",
+      "effect_ci_high": "0.003798",
+      "p_value": "0.320312",
+      "significant": false
+    },
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "gp_plus_sensor_conditional_missingness",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "-0.001216",
+      "effect_ci_low": "-0.008410",
+      "effect_ci_high": "0.004296",
+      "p_value": "0.742188",
+      "significant": false
+    },
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "gp_plus_joint_generative_jvi_training",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "0.589187",
+      "effect_ci_low": "0.000819",
+      "effect_ci_high": "1.316066",
+      "p_value": "0.175781",
+      "significant": false
+    },
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "gp_plus_conformal_reliability",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "0.001606",
+      "effect_ci_low": "-0.001630",
+      "effect_ci_high": "0.006709",
+      "p_value": "0.816406",
+      "significant": false
+    },
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "myopic_policy_baseline",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "1.177617",
+      "effect_ci_low": "0.412632",
+      "effect_ci_high": "1.785830",
+      "p_value": "0.054688",
+      "significant": false
+    },
+    {
+      "baseline_variant": "base_gp_only",
+      "variant_name": "full_model",
+      "metric": "crps",
+      "repeat_count": 5,
+      "effect_mean": "0.616878",
+      "effect_ci_low": "0.008834",
+      "effect_ci_high": "1.299129",
+      "p_value": "0.203125",
+      "significant": false
+    }
+  ]
+}

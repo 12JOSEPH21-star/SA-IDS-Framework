@@ -12,6 +12,9 @@ from unittest import mock
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 GPYTORCH_AVAILABLE = importlib.util.find_spec("gpytorch") is not None
 
+if TORCH_AVAILABLE:
+    import torch
+
 
 @unittest.skipUnless(TORCH_AVAILABLE and GPYTORCH_AVAILABLE, "requires torch and gpytorch")
 class ExperimentRunnerTests(unittest.TestCase):
@@ -261,6 +264,183 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertTrue(progress_path.exists())
         self.assertTrue(checkpoint_path.exists())
         self.assertIn("rmse", result.base_metrics)
+
+    def test_policy_ablation_candidate_pool_is_capped(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        resolved = runner._resolve_pipeline_config(prepared)
+        stabilized = runner._stabilize_pipeline_config_for_large_runs(
+            resolved,
+            row_caps={"applied": True},
+        )
+        from pipeline import SilenceAwareIDS
+
+        pipeline = SilenceAwareIDS(stabilized)
+        variant = pipeline.spawn_ablation_variant("full_model")
+        candidate_rows = 6000
+        candidate_x = prepared.evaluation.X.repeat((candidate_rows // prepared.evaluation.X.shape[0]) + 1, 1)[:candidate_rows]
+        candidate_cost = prepared.evaluation.cost.repeat((candidate_rows // prepared.evaluation.cost.shape[0]) + 1)[:candidate_rows]
+        candidate_context = prepared.evaluation.context.repeat((candidate_rows // prepared.evaluation.context.shape[0]) + 1, 1)[:candidate_rows]
+        candidate_m = prepared.evaluation.M.repeat((candidate_rows // prepared.evaluation.M.shape[0]) + 1)[:candidate_rows]
+        candidate_s = prepared.evaluation.S.repeat((candidate_rows // prepared.evaluation.S.shape[0]) + 1)[:candidate_rows]
+        metadata = prepared.evaluation.sensor_metadata
+        repeats = (candidate_rows // metadata.sensor_type.shape[0]) + 1
+        candidate_metadata = type(metadata)(
+            sensor_instance=metadata.sensor_instance.repeat(repeats)[:candidate_rows],
+            sensor_type=metadata.sensor_type.repeat(repeats)[:candidate_rows],
+            sensor_group=metadata.sensor_group.repeat(repeats)[:candidate_rows],
+            sensor_modality=metadata.sensor_modality.repeat(repeats)[:candidate_rows],
+            installation_environment=metadata.installation_environment.repeat(repeats)[:candidate_rows],
+            maintenance_state=metadata.maintenance_state.repeat(repeats)[:candidate_rows],
+            continuous=metadata.continuous.repeat(repeats, 1)[:candidate_rows],
+        )
+
+        capped = runner._cap_candidate_pool(
+            variant,
+            candidate_x=candidate_x,
+            candidate_cost=candidate_cost,
+            candidate_context=candidate_context,
+            candidate_M=candidate_m,
+            candidate_S=candidate_s,
+            candidate_sensor_metadata=candidate_metadata,
+        )
+        capped_x, capped_cost, capped_context, capped_m, capped_s, capped_metadata, info = capped
+        self.assertTrue(info["applied"])
+        self.assertLess(int(capped_x.shape[0]), candidate_rows)
+        self.assertEqual(int(capped_x.shape[0]), int(capped_cost.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_context.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_m.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_s.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_metadata.sensor_type.shape[0]))
+
+    def test_policy_ablation_evaluation_rows_are_capped(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        resolved = runner._resolve_pipeline_config(prepared)
+        stabilized = runner._stabilize_pipeline_config_for_large_runs(
+            resolved,
+            row_caps={"applied": True},
+        )
+        from pipeline import SilenceAwareIDS
+
+        pipeline = SilenceAwareIDS(stabilized)
+        variant = pipeline.spawn_ablation_variant("full_model")
+        eval_rows = 6000
+        eval_x = prepared.evaluation.X.repeat((eval_rows // prepared.evaluation.X.shape[0]) + 1, 1)[:eval_rows]
+        eval_y = prepared.evaluation.y.repeat((eval_rows // prepared.evaluation.y.shape[0]) + 1)[:eval_rows]
+        eval_context = prepared.evaluation.context.repeat((eval_rows // prepared.evaluation.context.shape[0]) + 1, 1)[:eval_rows]
+        eval_m = prepared.evaluation.M.repeat((eval_rows // prepared.evaluation.M.shape[0]) + 1)[:eval_rows]
+        eval_s = prepared.evaluation.S.repeat((eval_rows // prepared.evaluation.S.shape[0]) + 1)[:eval_rows]
+        metadata = prepared.evaluation.sensor_metadata
+        repeats = (eval_rows // metadata.sensor_type.shape[0]) + 1
+        eval_metadata = type(metadata)(
+            sensor_instance=metadata.sensor_instance.repeat(repeats)[:eval_rows],
+            sensor_type=metadata.sensor_type.repeat(repeats)[:eval_rows],
+            sensor_group=metadata.sensor_group.repeat(repeats)[:eval_rows],
+            sensor_modality=metadata.sensor_modality.repeat(repeats)[:eval_rows],
+            installation_environment=metadata.installation_environment.repeat(repeats)[:eval_rows],
+            maintenance_state=metadata.maintenance_state.repeat(repeats)[:eval_rows],
+            continuous=metadata.continuous.repeat(repeats, 1)[:eval_rows],
+        )
+
+        capped = runner._cap_ablation_evaluation(
+            variant,
+            X_eval=eval_x,
+            y_eval=eval_y,
+            context_eval=eval_context,
+            M_eval=eval_m,
+            S_eval=eval_s,
+            sensor_metadata_eval=eval_metadata,
+            batch_size=128,
+        )
+        capped_x, capped_y, capped_context, capped_m, capped_s, capped_metadata, capped_batch_size, info = capped
+        self.assertTrue(info["applied"])
+        self.assertLess(int(capped_x.shape[0]), eval_rows)
+        self.assertEqual(int(capped_x.shape[0]), int(capped_y.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_context.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_m.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_s.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_metadata.sensor_type.shape[0]))
+        self.assertEqual(int(capped_batch_size), 64)
+
+    def test_ensure_dynamic_silence_recomputes_only_when_needed(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        resolved = runner._resolve_pipeline_config(prepared)
+        from pipeline import SilenceAwareIDS
+
+        pipeline = SilenceAwareIDS(resolved)
+        heartbeat_path = self.root / "heartbeat.jsonl"
+        self.assertEqual(int(prepared.evaluation.S.sum().item()), 0)
+
+        with mock.patch.object(
+            pipeline,
+            "detect_silence",
+            return_value={"dynamic_silence": prepared.evaluation.missing_indicator.clone()},
+        ) as detect_mock:
+            ensured = runner._ensure_dynamic_silence(
+                pipeline,
+                prepared.evaluation,
+                batch_size=4,
+                heartbeat_path=heartbeat_path,
+                stage="running_sensitivity",
+            )
+
+        detect_mock.assert_called_once()
+        self.assertIsNotNone(ensured)
+        self.assertGreater(int(ensured.sum().item()), 0)
+        heartbeat_text = heartbeat_path.read_text(encoding="utf-8")
+        self.assertIn('"stage": "running_sensitivity"', heartbeat_text)
+        self.assertIn('"step": "evaluation_silence_complete"', heartbeat_text)
+
+    def test_sensitivity_rows_are_capped_for_large_runs(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        large_rows = 10000
+        repeated_eval = self.ResearchExperimentRunner._slice_batch_rows(
+            prepared.evaluation,
+            torch.arange(prepared.evaluation.X.shape[0], device=prepared.evaluation.X.device).repeat(
+                (large_rows // prepared.evaluation.X.shape[0]) + 1
+            )[:large_rows],
+        )
+        prepared_large = type(prepared)(
+            full=repeated_eval,
+            train=prepared.train,
+            calibration=prepared.calibration,
+            evaluation=repeated_eval,
+            metadata_cardinalities=prepared.metadata_cardinalities,
+            feature_schema=prepared.feature_schema,
+        )
+        capped = runner._cap_sensitivity_evaluation(prepared_large, batch_size=512)
+        capped_x, capped_y, capped_context, capped_m, capped_s, capped_metadata, capped_batch_size, info = capped
+        self.assertTrue(info["applied"])
+        self.assertEqual(int(capped_x.shape[0]), 8192)
+        self.assertEqual(int(capped_x.shape[0]), int(capped_y.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_context.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_m.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_s.shape[0]))
+        self.assertEqual(int(capped_x.shape[0]), int(capped_metadata.sensor_type.shape[0]))
+        self.assertEqual(int(capped_batch_size), 256)
+
+    def test_benchmark_candidate_limit_is_stabilized_for_large_runs(self) -> None:
+        runner = self._build_runner()
+        prepared = runner.prepare_data()
+        large_rows = 32768
+        repeated_eval = self.ResearchExperimentRunner._slice_batch_rows(
+            prepared.evaluation,
+            torch.arange(prepared.evaluation.X.shape[0], device=prepared.evaluation.X.device).repeat(
+                (large_rows // prepared.evaluation.X.shape[0]) + 1
+            )[:large_rows],
+        )
+        prepared_large = type(prepared)(
+            full=repeated_eval,
+            train=prepared.train,
+            calibration=prepared.calibration,
+            evaluation=repeated_eval,
+            metadata_cardinalities=prepared.metadata_cardinalities,
+            feature_schema=prepared.feature_schema,
+        )
+        self.assertEqual(runner._effective_benchmark_candidate_limit(prepared_large), 65536)
 
 
 if __name__ == "__main__":

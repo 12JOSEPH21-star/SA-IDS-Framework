@@ -1,0 +1,7 @@
+repeat_seed,variant_name,cumulative_information_gain,uncertainty_reduction,cumulative_energy_cost,routing_cost,cost_normalized_gain,num_selected
+7,random,15.041192,15.041192,8.000000,7.191253,0.990122,8
+7,variance_policy_baseline,14.260879,14.260879,8.000000,5.315490,1.070999,8
+7,myopic_policy_baseline,13.318542,13.318542,8.000000,5.633778,0.976878,8
+7,rollout_policy_baseline,7.928230,7.928230,8.000000,5.634160,0.581497,8
+7,ppo_warmstart_baseline,15.113555,15.113555,8.000000,5.782348,1.096588,8
+7,full_model,15.041192,15.041192,8.000000,5.734293,1.095156,8

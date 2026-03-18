@@ -1,0 +1,39 @@
+{
+  "output_dir": "C:\\Programming Prctice\\data\\joint_weather_network_q1_2025\\outputs\\framework_joint_run",
+  "base_metrics": {
+    "rmse": 10.58402156829834,
+    "mae": null,
+    "crps": 4.390200138092041,
+    "log_score": null,
+    "coverage": 0.86578369140625,
+    "interval_width": 26.55447006225586,
+    "mean_missingness_proba": 0.00019518805493135005,
+    "final_adaptive_epsilon": null,
+    "mean_graph_quantile": null,
+    "mean_neighbor_error": null
+  },
+  "metadata": {
+    "recovered_at": "2026-03-17T21:16:13",
+    "recovered_from_heartbeat_step": "completed",
+    "recovered_metric_keys": [
+      "coverage",
+      "crps",
+      "final_adaptive_epsilon",
+      "interval_width",
+      "log_score",
+      "mae",
+      "mean_graph_quantile",
+      "mean_missingness_proba",
+      "mean_neighbor_error",
+      "rmse"
+    ],
+    "missing_metric_keys": [
+      "final_adaptive_epsilon",
+      "log_score",
+      "mae",
+      "mean_graph_quantile",
+      "mean_neighbor_error"
+    ],
+    "latest_completed_timestamp": "2026-03-17T21:12:52"
+  }
+}

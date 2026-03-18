@@ -1,0 +1,17 @@
+{
+  "config_path": "C:\\Programming Prctice\\data\\joint_weather_network_q1_2025\\framework_joint_q1.json",
+  "stage": "completed",
+  "base_metrics": {
+    "rmse": 10.58402156829834,
+    "mae": 5.2998857498168945,
+    "crps": 4.390200138092041,
+    "log_score": 4.113340854644775,
+    "mean_missingness_proba": 0.00019518805493135005,
+    "coverage": 0.86578369140625,
+    "interval_width": 26.55447006225586,
+    "final_adaptive_epsilon": 0.18492226230638487,
+    "mean_neighbor_error": 0.0026138201193382452,
+    "mean_graph_quantile": 0.0
+  },
+  "inference_batch_size": 128
+}

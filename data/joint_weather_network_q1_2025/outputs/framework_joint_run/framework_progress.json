@@ -1,0 +1,2491 @@
+{
+  "status": "completed",
+  "stage": "completed",
+  "updated_at": "2026-03-18T12:08:03",
+  "error": null,
+  "fit_summary": {
+    "state_history": {
+      "loss": [
+        824.4840024393052,
+        24.3647595399525,
+        17.4407325736247,
+        12.958766071358696,
+        9.901151573401876
+      ],
+      "state_loss": [
+        413.7555522436742,
+        23.72999508935027,
+        16.928647976950742,
+        12.700842643389478,
+        9.78682683641091
+      ],
+      "joint_missingness_loss": [
+        410.7284367541706,
+        0.6347644399994579,
+        0.5120846139030277,
+        0.2579234350091042,
+        0.11432473974377899
+      ]
+    },
+    "observation_history": {
+      "loss": [
+        9517.2783203125,
+        7102.8876953125,
+        4928.64599609375,
+        4430.7421875,
+        4654.30615234375,
+        4524.96826171875,
+        4161.3330078125,
+        3258.01904296875,
+        2765.388916015625,
+        2463.11669921875,
+        2379.6005859375,
+        2216.365478515625,
+        2028.447509765625,
+        1813.091064453125,
+        1617.3907470703125,
+        1504.0260009765625,
+        1478.03564453125,
+        1595.9940185546875,
+        1557.78369140625,
+        1486.685302734375,
+        1543.6524658203125,
+        1375.0484619140625,
+        1218.6585693359375,
+        1389.8419189453125,
+        1261.84130859375
+      ],
+      "self_supervised_loss": [
+        9047.9189453125,
+        6746.5322265625,
+        4712.3984375,
+        4280.94775390625,
+        4432.4951171875,
+        4279.2822265625,
+        3899.472412109375,
+        2982.11865234375,
+        2481.314453125,
+        2185.15625,
+        2120.3271484375,
+        1982.0416259765625,
+        1828.53125,
+        1658.6461181640625,
+        1514.58203125,
+        1451.0731201171875,
+        1441.7247314453125,
+        1537.839599609375,
+        1484.2254638671875,
+        1408.83642578125,
+        1475.24853515625,
+        1325.9259033203125,
+        1184.9979248046875,
+        1343.4981689453125,
+        1217.3924560546875
+      ],
+      "reconstruction_loss": [
+        76860.40625,
+        55829.29296875,
+        43786.8203125,
+        40152.96484375,
+        38373.34375,
+        37309.30859375,
+        35588.5625,
+        26813.388671875,
+        20888.2109375,
+        17404.83203125,
+        17518.845703125,
+        16780.51171875,
+        15954.1640625,
+        15031.1533203125,
+        13903.365234375,
+        13479.9990234375,
+        13571.0537109375,
+        14717.34375,
+        14186.1875,
+        13321.2802734375,
+        13914.4990234375,
+        12502.15234375,
+        11209.7919921875,
+        12900.70703125,
+        11586.7158203125
+      ],
+      "physics_loss": [
+        13606.7421875,
+        11623.1572265625,
+        3330.64990234375,
+        2651.22119140625,
+        5943.72607421875,
+        5475.94677734375,
+        3400.155517578125,
+        3002.558837890625,
+        3918.974365234375,
+        4440.22802734375,
+        3678.22265625,
+        3033.994873046875,
+        2326.259765625,
+        1551.7088623046875,
+        1239.3533935546875,
+        1027.9765625,
+        843.728271484375,
+        658.918701171875,
+        653.7210083007812,
+        764.4227294921875,
+        835.3155517578125,
+        754.7242431640625,
+        637.9765625,
+        532.1886596679688,
+        585.0562133789062
+      ],
+      "latent_ode_loss": [
+        24.082536697387695,
+        25.742408752441406,
+        13.029743194580078,
+        10.5755033493042,
+        15.758058547973633,
+        15.136802673339844,
+        12.010725975036621,
+        10.476322174072266,
+        11.921009063720703,
+        13.003301620483398,
+        12.40127944946289,
+        11.818536758422852,
+        9.778738975524902,
+        7.196682929992676,
+        6.204051494598389,
+        5.5123291015625,
+        4.93284797668457,
+        4.266537189483643,
+        4.693556785583496,
+        5.3225836753845215,
+        5.342254161834717,
+        4.765533924102783,
+        4.42108154296875,
+        4.1720290184021,
+        4.303094387054443
+      ],
+      "curriculum_mask_probability": [
+        0.05000000074505806,
+        0.05624999850988388,
+        0.0625,
+        0.06875000149011612,
+        0.07500000298023224,
+        0.08124999701976776,
+        0.08749999850988388,
+        0.09375,
+        0.10000000149011612,
+        0.10625000298023224,
+        0.11249999701976776,
+        0.11874999850988388,
+        0.125,
+        0.13124999403953552,
+        0.13750000298023224,
+        0.14374999701976776,
+        0.15000000596046448,
+        0.15625,
+        0.16249999403953552,
+        0.16875000298023224,
+        0.17499999701976776,
+        0.18125000596046448,
+        0.1875,
+        0.19374999403953552,
+        0.20000000298023224
+      ]
+    },
+    "dynamic_silence_threshold": null,
+    "missingness_history": {
+      "loss": [
+        410.7284367541706,
+        0.6347644399994579,
+        0.5120846139030277,
+        0.2579234350091042,
+        0.11432473974377899
+      ],
+      "missingness_loss": [
+        0.011797740801966938,
+        0.0002469751536864351,
+        0.00031856918258199585,
+        0.00034576000416564057,
+        0.0003417987916236598
+      ],
+      "reconstruction_loss": [
+        377.77129378253994,
+        0.4096144185599542,
+        0.2785053146694736,
+        0.05118463202518342,
+        -0.08515738207734103
+      ],
+      "kl_loss": [
+        16.80301212894119,
+        2.522377798886737,
+        2.9827664573385846,
+        3.095645561872516,
+        2.8958823423599824
+      ],
+      "health_kl_loss": [
+        31.85134501588618,
+        2.1762196382624097,
+        2.1825216543948045,
+        2.1613723039590695,
+        2.569104170675928
+      ],
+      "health_reconstruction_loss": [
+        3.573191727482481,
+        1.1164588945975993,
+        1.1797982780262828,
+        0.8983089692137582,
+        0.8469994210295226
+      ],
+      "transition_loss": [
+        633.1020979399691,
+        1.001505543710664,
+        0.9758347020251676,
+        0.9615611905028345,
+        0.9274999232002301
+      ],
+      "health_transition_loss": [
+        44.63878189789193,
+        1.619590400594916,
+        1.4836285511315737,
+        1.5913908104490133,
+        1.3415519615986184
+      ]
+    },
+    "conformal_quantile": 2.3911020755767822
+  },
+  "base_metrics": {
+    "rmse": 10.58402156829834,
+    "mae": 5.2998857498168945,
+    "crps": 4.390200138092041,
+    "log_score": 4.113340854644775,
+    "mean_missingness_proba": 0.00019518805493135005,
+    "coverage": 0.86578369140625,
+    "interval_width": 26.55447006225586,
+    "final_adaptive_epsilon": 0.18492226230638487,
+    "mean_neighbor_error": 0.0026138201193382452,
+    "mean_graph_quantile": 0.0
+  },
+  "ablations": {
+    "base_gp_only": {
+      "variant_name": "base_gp_only",
+      "metrics": {
+        "rmse": 14.97231388092041,
+        "mae": 11.550312042236328,
+        "crps": 8.915380477905273,
+        "log_score": 6.230019569396973
+      },
+      "report": {
+        "use_m2": false,
+        "use_m3": false,
+        "use_m5": false,
+        "dynamic_silence": false,
+        "missingness_assumption": "disabled",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_generative_decoder",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": true,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": null,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": null,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.83765709400177,
+          1.837656855583191,
+          1.8368899822235107
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_dynamic_silence": {
+      "variant_name": "gp_plus_dynamic_silence",
+      "metrics": {
+        "rmse": 15.018576622009277,
+        "mae": 11.616097450256348,
+        "crps": 8.968994140625,
+        "log_score": 6.244637489318848
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": false,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "disabled",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_generative_decoder",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": true,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": null,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8214164972305298,
+          1.8214162588119507,
+          1.820656180381775
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_homogeneous_missingness": {
+      "variant_name": "gp_plus_homogeneous_missingness",
+      "metrics": {
+        "rmse": 14.984511375427246,
+        "mae": 11.567678451538086,
+        "crps": 8.925833702087402,
+        "log_score": 6.221288681030273,
+        "mean_missingness_proba": 0.00010443500650580972
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "homogeneous",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "plug_in",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "plug_in_latent_summary",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": true,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8356943130493164,
+          1.8356940746307373,
+          1.8349201679229736
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_sensor_conditional_missingness": {
+      "variant_name": "gp_plus_sensor_conditional_missingness",
+      "metrics": {
+        "rmse": 14.987001419067383,
+        "mae": 11.571222305297852,
+        "crps": 8.93303108215332,
+        "log_score": 6.2368059158325195,
+        "mean_missingness_proba": 0.00010097924678120762
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "plug_in",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "plug_in_latent_summary",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": true,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          1,
+          491,
+          6
+        ],
+        "selected_x": [
+          [
+            35.59333419799805,
+            129.3522186279297,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.293819427490234,
+            126.16282653808594,
+            1986.4832763671875,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.96611022949219,
+            124.63047790527344,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8327966928482056,
+          1.8327951431274414,
+          1.8319910764694214
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 8.849072456359863,
+        "total_operational_cost": 11.849072456359863,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_joint_variational_missingness": {
+      "variant_name": "gp_plus_joint_variational_missingness",
+      "metrics": {
+        "rmse": 9.595656394958496,
+        "mae": 4.305242538452148,
+        "crps": 3.626455068588257,
+        "log_score": 8.513080596923828,
+        "mean_missingness_proba": 0.00011098550749011338
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_variational",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_variational_latent_adapter",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": true,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.806877851486206,
+          1.806877613067627,
+          1.8061237335205078
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_joint_jvi_training": {
+      "variant_name": "gp_plus_joint_jvi_training",
+      "metrics": {
+        "rmse": 7.220633029937744,
+        "mae": 2.201695680618286,
+        "crps": 1.9478988647460938,
+        "log_score": 3.5775930881500244,
+        "mean_missingness_proba": 0.00018853589426726103
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_variational",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "joint_variational",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_latent_adapter",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": true,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          1,
+          14229,
+          6
+        ],
+        "selected_x": [
+          [
+            35.59333419799805,
+            129.3522186279297,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.293819427490234,
+            126.16282653808594,
+            2066.0,
+            0.5,
+            0.8660253882408142,
+            0.9955458045005798,
+            0.0942792221903801
+          ],
+          [
+            37.96611022949219,
+            124.63047790527344,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          2.064908266067505,
+          2.064906597137451,
+          2.0640008449554443
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 8.849072456359863,
+        "total_operational_cost": 11.849072456359863,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_joint_generative_missingness": {
+      "variant_name": "gp_plus_joint_generative_missingness",
+      "metrics": {
+        "rmse": 10.299322128295898,
+        "mae": 5.3298659324646,
+        "crps": 4.226414203643799,
+        "log_score": 13.060029983520508,
+        "mean_missingness_proba": 0.0001657352695474401
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_generative_decoder",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": true,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          1,
+          14229,
+          32508
+        ],
+        "selected_x": [
+          [
+            35.59333419799805,
+            129.3522186279297,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.293819427490234,
+            126.16282653808594,
+            2066.0,
+            0.5,
+            0.8660253882408142,
+            0.9955458045005798,
+            0.0942792221903801
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8370791673660278,
+          1.8370776176452637,
+          1.83627188205719
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 8.849117279052734,
+        "total_operational_cost": 11.849117279052734,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_joint_generative_jvi_training": {
+      "variant_name": "gp_plus_joint_generative_jvi_training",
+      "metrics": {
+        "rmse": 8.506250381469727,
+        "mae": 3.003587245941162,
+        "crps": 2.5682947635650635,
+        "log_score": 16.17770004272461,
+        "mean_missingness_proba": 0.00016326422337442636
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": true,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          1,
+          23642,
+          6
+        ],
+        "selected_x": [
+          [
+            35.59333419799805,
+            129.3522186279297,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            2130.183349609375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9981954097747803,
+            0.06004896014928818
+          ],
+          [
+            37.96611022949219,
+            124.63047790527344,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          2.0510010719299316,
+          2.050999402999878,
+          2.0501208305358887
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.06557559967041,
+        "total_operational_cost": 12.06557559967041,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_pattern_mixture_missingness": {
+      "variant_name": "gp_plus_pattern_mixture_missingness",
+      "metrics": {
+        "rmse": 14.917411804199219,
+        "mae": 11.471980094909668,
+        "crps": 8.850181579589844,
+        "log_score": 6.207430362701416,
+        "mean_missingness_proba": 0.00010013871360570192
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": false,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "pattern_mixture",
+        "missingness_inference_strategy": "plug_in",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "plug_in_latent_summary",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": true,
+          "pattern_mixture_missingness": true,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": null
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.823058009147644,
+          1.823057770729065,
+          1.8222970962524414
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "gp_plus_conformal_reliability": {
+      "variant_name": "gp_plus_conformal_reliability",
+      "metrics": {
+        "rmse": 14.996703147888184,
+        "mae": 11.585020065307617,
+        "crps": 8.942399024963379,
+        "log_score": 6.233452796936035,
+        "coverage": 0.91357421875,
+        "interval_width": 34.16508483886719,
+        "final_adaptive_epsilon": 0.10000000000000095,
+        "mean_neighbor_error": 0.0,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": false,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "disabled",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_generative_decoder",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "adaptive",
+        "reliability_relational": false,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": true,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": null,
+          "conformal_quantile": 3.5875539779663086
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8208422660827637,
+          1.8208420276641846,
+          1.820082187652588
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "relational_reliability_baseline": {
+      "variant_name": "relational_reliability_baseline",
+      "metrics": {
+        "rmse": 15.021275520324707,
+        "mae": 11.6199312210083,
+        "crps": 8.974325180053711,
+        "log_score": 6.253018856048584,
+        "coverage": 0.896575927734375,
+        "interval_width": 32.74528503417969,
+        "final_adaptive_epsilon": 0.12853001691361068,
+        "mean_neighbor_error": 0.001970320807572497,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": false,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "disabled",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "sequential",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_generative_decoder",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": true,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": null,
+          "conformal_quantile": 3.598586082458496
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          0,
+          32508,
+          376
+        ],
+        "selected_x": [
+          [
+            38.250850677490234,
+            128.56472778320312,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            1991.0,
+            -0.258819043636322,
+            0.9659258127212524,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          1.8137691020965576,
+          1.8137688636779785,
+          1.8130120038986206
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058378219604492,
+        "total_operational_cost": 12.058378219604492,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "myopic_policy_baseline": {
+      "variant_name": "myopic_policy_baseline",
+      "metrics": {
+        "rmse": 8.038019180297852,
+        "mae": 3.039738178253174,
+        "crps": 2.5819501876831055,
+        "log_score": 11.409929275512695,
+        "coverage": 0.867919921875,
+        "interval_width": 9.775826454162598,
+        "mean_missingness_proba": 0.00015932419046293944,
+        "final_adaptive_epsilon": 0.21854937305625835,
+        "mean_neighbor_error": 0.006619361084925811,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": true,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "ablation_evaluation": {
+          "applied": true,
+          "limit": 4096,
+          "original_rows": 32768,
+          "effective_rows": 4096,
+          "evaluation_batch_size": 64,
+          "planning_strategy": "lazy_greedy"
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": 7.286456108093262
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          3624,
+          1,
+          2342
+        ],
+        "selected_x": [
+          [
+            37.23952102661133,
+            131.8698272705078,
+            2155.316650390625,
+            -0.9659258127212524,
+            0.258819043636322,
+            0.999079167842865,
+            0.04290475696325302
+          ],
+          [
+            36.45853042602539,
+            127.26876068115234,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            2105.416748046875,
+            -0.9659258127212524,
+            -0.258819043636322,
+            0.997017502784729,
+            0.07717546075582504
+          ]
+        ],
+        "utility_trace": [
+          2.0246353149414062,
+          2.0245370864868164,
+          2.019805669784546
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 8.150245666503906,
+        "total_operational_cost": 11.150245666503906,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "ppo_warmstart_baseline": {
+      "variant_name": "ppo_warmstart_baseline",
+      "metrics": {
+        "rmse": 8.396910667419434,
+        "mae": 4.784214496612549,
+        "crps": 3.928145170211792,
+        "log_score": 3.5758543014526367,
+        "coverage": 0.87451171875,
+        "interval_width": 21.779531478881836,
+        "mean_missingness_proba": 0.00011224709305679426,
+        "final_adaptive_epsilon": 0.3319279127306644,
+        "mean_neighbor_error": 0.012973251168379704,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "ppo_warmstart",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "ppo_warmstarted_actor_critic_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": true,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "ablation_evaluation": {
+          "applied": true,
+          "limit": 2048,
+          "original_rows": 32768,
+          "effective_rows": 2048,
+          "evaluation_batch_size": 64,
+          "planning_strategy": "ppo_warmstart"
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": 1.7761833667755127
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          1135,
+          2031,
+          49
+        ],
+        "selected_x": [
+          [
+            38.250999450683594,
+            128.56500244140625,
+            2097.0,
+            0.7071067690849304,
+            -0.7071067690849304,
+            0.997017502784729,
+            0.07717546075582504
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            2094.0,
+            1.0,
+            6.123234262925839e-17,
+            0.997017502784729,
+            0.07717546075582504
+          ],
+          [
+            33.173301696777344,
+            126.2683334350586,
+            1986.699951171875,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          3.451510190963745,
+          3.0790810585021973,
+          3.0777978897094727
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.010299682617188,
+        "total_operational_cost": 12.010299682617188,
+        "planning_strategy": "ppo_warmstart",
+        "policy_stats": {
+          "policy_training_loss": 9.846890449523926,
+          "policy_surrogate_loss": 0.03953896835446358,
+          "policy_value_loss": 19.56819725036621,
+          "policy_entropy": 0.00020854435570072383,
+          "policy_training_steps": 10.0,
+          "policy_training_candidates": 1024.0,
+          "policy_screened_candidates": 888.0
+        }
+      }
+    },
+    "rollout_policy_baseline": {
+      "variant_name": "rollout_policy_baseline",
+      "metrics": {
+        "rmse": 10.996949195861816,
+        "mae": 5.137264728546143,
+        "crps": 4.2173848152160645,
+        "log_score": 4.682008743286133,
+        "coverage": 0.8733723759651184,
+        "interval_width": 20.180286407470703,
+        "mean_missingness_proba": 0.00027591909747570753,
+        "final_adaptive_epsilon": 0.23156730778598025,
+        "mean_neighbor_error": 0.008339675645643396,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "non_myopic_rollout",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "discounted_non_myopic_rollout_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": true,
+          "variance_policy_baseline": false,
+          "full_model": false
+        },
+        "ablation_evaluation": {
+          "applied": true,
+          "limit": 3072,
+          "original_rows": 32768,
+          "effective_rows": 3072,
+          "evaluation_batch_size": 64,
+          "planning_strategy": "non_myopic_rollout"
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": 1.9368547201156616
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          2268,
+          4063,
+          47
+        ],
+        "selected_x": [
+          [
+            38.250999450683594,
+            128.56500244140625,
+            2090.0,
+            0.5,
+            0.8660253882408142,
+            0.997017502784729,
+            0.07717546075582504
+          ],
+          [
+            37.965999603271484,
+            124.62999725341797,
+            2094.0,
+            1.0,
+            6.123234262925839e-17,
+            0.997017502784729,
+            0.07717546075582504
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            1986.38330078125,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ]
+        ],
+        "utility_trace": [
+          3.5500967502593994,
+          3.042693614959717,
+          3.0414257049560547
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.058663368225098,
+        "total_operational_cost": 12.058663368225098,
+        "planning_strategy": "non_myopic_rollout",
+        "policy_stats": {}
+      }
+    },
+    "variance_policy_baseline": {
+      "variant_name": "variance_policy_baseline",
+      "metrics": {
+        "rmse": 8.710785865783691,
+        "mae": 3.375713348388672,
+        "crps": 2.898465871810913,
+        "log_score": 17.147050857543945,
+        "coverage": 0.87109375,
+        "interval_width": 14.133176803588867,
+        "mean_missingness_proba": 0.00013533538731280714,
+        "final_adaptive_epsilon": 0.25568652965789107,
+        "mean_neighbor_error": 0.00870990317630099,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "variance",
+        "policy_planning_strategy": "lazy_greedy",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "myopic_gaussian_information_surrogate",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": true,
+          "full_model": false
+        },
+        "ablation_evaluation": {
+          "applied": true,
+          "limit": 4096,
+          "original_rows": 32768,
+          "effective_rows": 4096,
+          "evaluation_batch_size": 64,
+          "planning_strategy": "lazy_greedy"
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": 9.627110481262207
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          3624,
+          1,
+          2342
+        ],
+        "selected_x": [
+          [
+            37.23952102661133,
+            131.8698272705078,
+            2155.316650390625,
+            -0.9659258127212524,
+            0.258819043636322,
+            0.999079167842865,
+            0.04290475696325302
+          ],
+          [
+            36.45853042602539,
+            127.26876068115234,
+            1986.0999755859375,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            33.1220588684082,
+            126.26786041259766,
+            2105.416748046875,
+            -0.9659258127212524,
+            -0.258819043636322,
+            0.997017502784729,
+            0.07717546075582504
+          ]
+        ],
+        "utility_trace": [
+          2.646900177001953,
+          2.6468210220336914,
+          2.640631914138794
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 8.150245666503906,
+        "total_operational_cost": 11.150245666503906,
+        "planning_strategy": "lazy_greedy",
+        "policy_stats": {}
+      }
+    },
+    "full_model": {
+      "variant_name": "full_model",
+      "metrics": {
+        "rmse": 5.570463180541992,
+        "mae": 2.0751094818115234,
+        "crps": 1.8435118198394775,
+        "log_score": 47.75519943237305,
+        "coverage": 0.86767578125,
+        "interval_width": 9.690152168273926,
+        "mean_missingness_proba": 0.00010845858923858032,
+        "final_adaptive_epsilon": 0.2591766809567185,
+        "mean_neighbor_error": 0.011551720270858983,
+        "mean_graph_quantile": 0.0
+      },
+      "report": {
+        "use_m2": true,
+        "use_m3": true,
+        "use_m5": true,
+        "dynamic_silence": true,
+        "missingness_assumption": "sensor_conditional",
+        "missingness_mode": "selection",
+        "missingness_inference_strategy": "joint_generative",
+        "diagnosis_mode": "temporal_nwp",
+        "policy_surrogate": "mi_proxy",
+        "policy_planning_strategy": "ppo_online",
+        "state_training_strategy": "joint_generative",
+        "policy_objective": "environment_trained_ppo_actor_critic",
+        "missingness_integration": "joint_elbo_sparse_gp_with_temporal_transition_prior",
+        "diagnosis_representation": "pi_ssd_embedding",
+        "diagnosis_temporal_model": "dbn",
+        "diagnosis_curriculum": "linear_corruption_curriculum",
+        "diagnosis_latent_dynamics": "latent_ode_lite",
+        "observation_uncertainty_for_silence": true,
+        "missingness_sensor_health_latent": true,
+        "missingness_temporal_transition_prior": true,
+        "missingness_transition_group_key": "sensor_instance",
+        "missingness_transition_time_index": 2,
+        "reliability_prediction_target": "observation",
+        "reliability_mode": "relational_adaptive",
+        "reliability_relational": true,
+        "reliability_graph_corel": false,
+        "reliability_graph_message_passing_steps": 2,
+        "dynamic_feature_policy_mode": {
+          "training": true,
+          "prediction": true,
+          "policy": false
+        },
+        "comparison_grid": {
+          "base_gp_only": false,
+          "gp_plus_dynamic_silence": false,
+          "gp_plus_homogeneous_missingness": false,
+          "gp_plus_sensor_conditional_missingness": false,
+          "gp_plus_joint_variational_missingness": false,
+          "gp_plus_joint_jvi_training": false,
+          "gp_plus_joint_generative_missingness": false,
+          "gp_plus_joint_generative_jvi_training": false,
+          "gp_plus_pattern_mixture_missingness": false,
+          "pattern_mixture_missingness": false,
+          "gp_plus_conformal_reliability": false,
+          "relational_reliability_baseline": false,
+          "myopic_policy_baseline": false,
+          "ppo_warmstart_baseline": false,
+          "rollout_policy_baseline": false,
+          "variance_policy_baseline": false,
+          "full_model": true
+        },
+        "ablation_evaluation": {
+          "applied": true,
+          "limit": 2048,
+          "original_rows": 32768,
+          "effective_rows": 2048,
+          "evaluation_batch_size": 64,
+          "planning_strategy": "ppo_online"
+        },
+        "fit_summary": {
+          "state_epochs": 5,
+          "observation_steps": 25,
+          "dynamic_silence_threshold": null,
+          "missingness_epochs": 5,
+          "conformal_quantile": 11.186738967895508
+        }
+      },
+      "selection": {
+        "selected_indices": [
+          524,
+          2,
+          306
+        ],
+        "selected_x": [
+          [
+            33.173301696777344,
+            126.2683334350586,
+            2082.949951171875,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9955458045005798,
+            0.0942792221903801
+          ],
+          [
+            37.88589096069336,
+            126.7664794921875,
+            1986.1500244140625,
+            -1.0,
+            -1.8369701465288538e-16,
+            0.9867305755615234,
+            0.1623661369085312
+          ],
+          [
+            37.23952102661133,
+            131.8698272705078,
+            2035.63330078125,
+            -0.9659258127212524,
+            0.258819043636322,
+            0.9917227029800415,
+            0.1283983588218689
+          ]
+        ],
+        "utility_trace": [
+          3.027820348739624,
+          3.027780294418335,
+          3.02774977684021
+        ],
+        "total_cost": 3.0,
+        "routing_cost": 9.882963180541992,
+        "total_operational_cost": 12.882963180541992,
+        "planning_strategy": "ppo_online",
+        "policy_stats": {
+          "policy_training_loss": 14.008234977722168,
+          "policy_surrogate_loss": 1.4901161193847656e-08,
+          "policy_value_loss": 28.022497177124023,
+          "policy_entropy": 3.01397442817688,
+          "policy_training_steps": 10.0,
+          "policy_training_candidates": 1024.0,
+          "policy_rollout_episodes": 8.0,
+          "policy_rollout_mean_reward": 3.2331102788448334,
+          "policy_rollout_steps": 240.0
+        }
+      }
+    }
+  },
+  "completed_ablation_variants": [
+    "base_gp_only",
+    "gp_plus_dynamic_silence",
+    "gp_plus_homogeneous_missingness",
+    "gp_plus_sensor_conditional_missingness",
+    "gp_plus_joint_variational_missingness",
+    "gp_plus_joint_jvi_training",
+    "gp_plus_joint_generative_missingness",
+    "gp_plus_joint_generative_jvi_training",
+    "gp_plus_pattern_mixture_missingness",
+    "gp_plus_conformal_reliability",
+    "relational_reliability_baseline",
+    "myopic_policy_baseline",
+    "ppo_warmstart_baseline",
+    "rollout_policy_baseline",
+    "variance_policy_baseline",
+    "full_model"
+  ],
+  "sensitivity": {
+    "logit_scale_0.500": {
+      "rmse": 10.377396583557129,
+      "mae": 5.2722907066345215,
+      "crps": 4.358961582183838,
+      "log_score": 4.068381309509277,
+      "coverage": 0.8665771484375,
+      "interval_width": 26.04294776916504,
+      "mean_missingness_proba": 0.006317272316664457,
+      "final_adaptive_epsilon": 0.22642903472385398,
+      "mean_neighbor_error": 0.00533567109768167,
+      "mean_graph_quantile": 0.0
+    },
+    "logit_scale_1.000": {
+      "rmse": 10.373059272766113,
+      "mae": 5.261757850646973,
+      "crps": 4.352097511291504,
+      "log_score": 4.066349506378174,
+      "coverage": 0.8665771484375,
+      "interval_width": 25.95553970336914,
+      "mean_missingness_proba": 0.00011099981929874048,
+      "final_adaptive_epsilon": 0.22642903472385398,
+      "mean_neighbor_error": 0.00533567109768167,
+      "mean_graph_quantile": 0.0
+    },
+    "logit_scale_1.500": {
+      "rmse": 10.373015403747559,
+      "mae": 5.261742115020752,
+      "crps": 4.352092266082764,
+      "log_score": 4.066420555114746,
+      "coverage": 0.8665771484375,
+      "interval_width": 25.95541763305664,
+      "mean_missingness_proba": 0.00010027732059825212,
+      "final_adaptive_epsilon": 0.22642903472385398,
+      "mean_neighbor_error": 0.00533567109768167,
+      "mean_graph_quantile": 0.0
+    },
+    "logit_scale_2.000": {
+      "rmse": 10.373010635375977,
+      "mae": 5.261741638183594,
+      "crps": 4.352092266082764,
+      "log_score": 4.0664286613464355,
+      "coverage": 0.8665771484375,
+      "interval_width": 25.955415725708008,
+      "mean_missingness_proba": 0.00010000521433539689,
+      "final_adaptive_epsilon": 0.22642903472385398,
+      "mean_neighbor_error": 0.00533567109768167,
+      "mean_graph_quantile": 0.0
+    }
+  },
+  "selection": {
+    "selected_indices": [
+      6413,
+      32508,
+      252
+    ],
+    "selected_x": [
+      [
+        38.250999450683594,
+        128.56500244140625,
+        2027.0,
+        0.258819043636322,
+        -0.9659258127212524,
+        0.9917227029800415,
+        0.1283983588218689
+      ],
+      [
+        37.965999603271484,
+        124.62999725341797,
+        1991.0,
+        -0.258819043636322,
+        0.9659258127212524,
+        0.9867305755615234,
+        0.1623661369085312
+      ],
+      [
+        33.173301696777344,
+        126.2683334350586,
+        1986.2833251953125,
+        -1.0,
+        -1.8369701465288538e-16,
+        0.9867305755615234,
+        0.1623661369085312
+      ]
+    ],
+    "utility_trace": [
+      3.7151107788085938,
+      3.065953254699707,
+      3.064675807952881
+    ],
+    "total_cost": 3.0,
+    "routing_cost": 9.010299682617188,
+    "total_operational_cost": 12.010299682617188,
+    "planning_strategy": "ppo_online",
+    "policy_stats": {
+      "policy_training_loss": 2.0142910480499268,
+      "policy_surrogate_loss": -2.4835269396561444e-09,
+      "policy_value_loss": 4.039439678192139,
+      "policy_entropy": 5.4287261962890625,
+      "policy_training_steps": 10.0,
+      "policy_training_candidates": 1024.0,
+      "policy_rollout_episodes": 8.0,
+      "policy_rollout_mean_reward": 5.405263900756836,
+      "policy_rollout_steps": 240.0,
+      "policy_screened_candidates": 1023.0
+    }
+  },
+  "dataset_summary": {
+    "train_rows": 131072,
+    "calibration_rows": 32768,
+    "evaluation_rows": 32768,
+    "row_caps": {
+      "applied": true,
+      "train_cap": 131072,
+      "calibration_cap": 32768,
+      "evaluation_cap": 32768,
+      "original_train_rows": 5375201,
+      "original_calibration_rows": 1111732,
+      "original_evaluation_rows": 1122535,
+      "effective_train_rows": 131072,
+      "effective_calibration_rows": 32768,
+      "effective_evaluation_rows": 32768,
+      "retained_full_rows": 32768,
+      "retained_full_source": "evaluation_proxy"
+    },
+    "effective_reliability_mode": "relational_adaptive",
+    "input_dim": 7,
+    "context_dim": 16,
+    "metadata_cardinalities": {
+      "sensor_type": 3,
+      "sensor_group": 1,
+      "sensor_modality": 2,
+      "installation_environment": 3,
+      "maintenance_state": 1
+    },
+    "feature_schema": {
+      "input_columns": [
+        "latitude",
+        "longitude",
+        "elapsed_hours",
+        "hour_sin",
+        "hour_cos",
+        "day_sin",
+        "day_cos"
+      ],
+      "context_columns": [
+        "humidity",
+        "pressure",
+        "wind_speed",
+        "dew_point_temperature",
+        "era5_temperature",
+        "era5_pressure",
+        "era5_u10",
+        "era5_v10",
+        "era5_precipitation",
+        "event_warning_active",
+        "event_warning_count",
+        "event_information_count",
+        "event_max_warning_level",
+        "event_station_active",
+        "event_station_count",
+        "event_station_max_warning_level"
+      ],
+      "continuous_metadata_columns": [
+        "elevation",
+        "maintenance_age",
+        "station_age_years",
+        "era5_orography",
+        "era5_land_sea_mask",
+        "qc_hour_bucket_availability_ratio",
+        "qc_status_or_qc_flag_count",
+        "qc_suspect_value_count",
+        "qc_raw_rows_per_observed_hour"
+      ]
+    }
+  },
+  "runtime_environment": {
+    "python_executable": "C:\\Programming Prctice\\.venv311\\Scripts\\python.exe",
+    "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "torch_version": "2.10.0+cpu",
+    "gpytorch_version": "1.15.2"
+  },
+  "reproducibility": {
+    "seed": 7,
+    "deterministic_algorithms": false,
+    "torch_num_threads": 4,
+    "matmul_precision": "high"
+  },
+  "benchmark": {
+    "expansion_factor": 4,
+    "benchmark_rows": 65536,
+    "prediction_batch_size": 512,
+    "predict_seconds": 0.5140188000004855,
+    "missingness_seconds": 0.7148859000008088,
+    "selection_seconds": 3.4073530999994546,
+    "input_tensor_bytes": 11796480,
+    "output_tensor_bytes": 786432,
+    "mean_predictive_variance": 3.0482988357543945,
+    "mean_predictive_mean_abs": 0.8320789337158203,
+    "mean_missingness_proba": 0.0001952701131813228,
+    "selection": {
+      "selected_indices": [
+        6413,
+        32508,
+        252
+      ],
+      "selected_x": [
+        [
+          38.250999450683594,
+          128.56500244140625,
+          2027.0,
+          0.258819043636322,
+          -0.9659258127212524,
+          0.9917227029800415,
+          0.1283983588218689
+        ],
+        [
+          37.965999603271484,
+          124.62999725341797,
+          1991.0,
+          -0.258819043636322,
+          0.9659258127212524,
+          0.9867305755615234,
+          0.1623661369085312
+        ],
+        [
+          33.173301696777344,
+          126.2683334350586,
+          1986.2833251953125,
+          -1.0,
+          -1.8369701465288538e-16,
+          0.9867305755615234,
+          0.1623661369085312
+        ]
+      ],
+      "utility_trace": [
+        3.7151107788085938,
+        3.065953254699707,
+        3.064675807952881
+      ],
+      "total_cost": 3.0,
+      "routing_cost": 9.010299682617188,
+      "total_operational_cost": 12.010299682617188,
+      "planning_strategy": "ppo_online",
+      "policy_stats": {
+        "policy_training_loss": 23.582799911499023,
+        "policy_surrogate_loss": 2.7318796114172983e-08,
+        "policy_value_loss": 47.17396926879883,
+        "policy_entropy": 4.185257434844971,
+        "policy_training_steps": 10.0,
+        "policy_training_candidates": 1024.0,
+        "policy_rollout_episodes": 8.0,
+        "policy_rollout_mean_reward": 5.258828520774841,
+        "policy_rollout_steps": 240.0,
+        "policy_screened_candidates": 1024.0
+      }
+    }
+  },
+  "is_partial": false
+}

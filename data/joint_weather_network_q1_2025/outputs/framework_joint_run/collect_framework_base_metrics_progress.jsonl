@@ -1,0 +1,14 @@
+{"timestamp": "2026-03-17T21:31:59", "step": "start", "payload": {"config": "C:\\Programming Prctice\\data\\joint_weather_network_q1_2025\\framework_joint_q1.json"}}
+{"timestamp": "2026-03-17T21:31:59", "step": "prepare_data_complete", "payload": {"source": "cache"}}
+{"timestamp": "2026-03-17T21:32:00", "step": "pipeline_restored", "payload": {"batch_size": 128}}
+{"timestamp": "2026-03-17T21:32:00", "step": "observed_subset_ready", "payload": {"observed_rows": 32768}}
+{"timestamp": "2026-03-17T21:32:00", "step": "predictive_summary_start", "payload": {"path": "missingness_aware_state_summary"}}
+{"timestamp": "2026-03-17T21:32:12", "step": "predictive_summary_complete", "payload": {"mean_variance": 45.224449157714844, "mean_missingness": 0.00019518805493135005}}
+{"timestamp": "2026-03-17T21:32:12", "step": "point_metrics_complete", "payload": {"rmse": 10.58402156829834, "mae": 5.2998857498168945, "crps": 4.390200138092041, "log_score": 4.113340854644775}}
+{"timestamp": "2026-03-17T21:32:12", "step": "silence_detection_start", "payload": {}}
+{"timestamp": "2026-03-17T21:32:21", "step": "silence_detection_complete", "payload": {"flagged": 32768}}
+{"timestamp": "2026-03-17T21:32:21", "step": "relational_features_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:32:21", "step": "relational_features_complete", "payload": {"feature_dim": 8}}
+{"timestamp": "2026-03-17T21:32:21", "step": "intervals_start", "payload": {"mode": "relational_adaptive"}}
+{"timestamp": "2026-03-17T21:36:59", "step": "intervals_complete", "payload": {"covered_rows": 32768, "interval_width": 26.55447006225586}}
+{"timestamp": "2026-03-17T21:36:59", "step": "completed", "payload": {"metric_keys": ["coverage", "crps", "final_adaptive_epsilon", "interval_width", "log_score", "mae", "mean_graph_quantile", "mean_missingness_proba", "mean_neighbor_error", "rmse"]}}

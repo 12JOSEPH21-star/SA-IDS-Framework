@@ -108,6 +108,17 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         )
         self.assertEqual(variants["gp_plus_joint_variational_missingness"].state_training.training_strategy, "sequential")
         self.assertEqual(variants["gp_plus_joint_jvi_training"].state_training.training_strategy, "joint_variational")
+
+    def test_policy_ablations_preserve_non_graph_reliability_mode(self) -> None:
+        pipeline = self._build_pipeline(
+            reliability=self.ConformalConfig(mode="relational_adaptive"),
+        )
+        variants = pipeline.build_ablation_configs()
+        self.assertEqual(variants["myopic_policy_baseline"].reliability.mode, "relational_adaptive")
+        self.assertEqual(variants["ppo_warmstart_baseline"].reliability.mode, "relational_adaptive")
+        self.assertEqual(variants["rollout_policy_baseline"].reliability.mode, "relational_adaptive")
+        self.assertEqual(variants["variance_policy_baseline"].reliability.mode, "relational_adaptive")
+        self.assertEqual(variants["full_model"].reliability.mode, "relational_adaptive")
         self.assertEqual(
             variants["gp_plus_joint_generative_missingness"].missingness.inference_strategy,
             "joint_generative",
@@ -140,6 +151,11 @@ class SilenceAwarePipelineTests(unittest.TestCase):
         self.assertIn("latent_ode_loss", summary.observation_history)
         self.assertIn("curriculum_mask_probability", summary.observation_history)
 
+        events: list[tuple[str, dict[str, object]]] = []
+
+        def record(step: str, payload: dict[str, object]) -> None:
+            events.append((step, payload))
+
         sensitivity = pipeline.run_missingness_sensitivity_analysis(
             self.x_eval,
             self.y_eval,
@@ -148,9 +164,12 @@ class SilenceAwarePipelineTests(unittest.TestCase):
                 "sensor_type": self.sensor_metadata["sensor_type"][: self.x_eval.shape[0]],
                 "sensor_group": self.sensor_metadata["sensor_group"][: self.x_eval.shape[0]],
             },
+            progress_callback=record,
         )
         self.assertIn("logit_scale_0.500", sensitivity)
         self.assertIn("rmse", sensitivity["logit_scale_1.000"])
+        self.assertTrue(any(step == "scale_start" for step, _ in events))
+        self.assertTrue(any(step == "scale_complete" for step, _ in events))
 
     def test_run_ablation_suite_subset(self) -> None:
         pipeline = self._build_pipeline()

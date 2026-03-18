@@ -6,3 +6,4 @@ cdsapi>=0.7,<1
 pandas>=2,<3
 xarray>=2024.1,<2027
 netCDF4>=1.6,<2
+matplotlib>=3.8,<4
