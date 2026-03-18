@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-17T22:22:10.472009+00:00",
+  "generated_at": "2026-03-18T03:48:34.051081+00:00",
   "output_dir": "C:\\Programming Prctice\\reports\\nmi_figures_20260318",
   "source_dirs": [
     "C:\\Programming Prctice\\review\\canonical_paper_materials_20260317",
@@ -7,7 +7,8 @@
     "C:\\Programming Prctice\\outputs\\benchmark_korea_noaa_q1_medium",
     "C:\\Programming Prctice\\outputs\\benchmark_japan_q1_medium",
     "C:\\Programming Prctice\\outputs\\benchmark_china_q1_medium",
-    "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium"
+    "C:\\Programming Prctice\\outputs\\benchmark_us_q1_medium",
+    "C:\\Programming Prctice\\outputs\\benchmark_taiwan_q1_pilot"
   ],
   "figures": {
     "figure_1": {
