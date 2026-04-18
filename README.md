@@ -449,7 +449,7 @@ python -m task_cli era5-download \
 
 Authentication:
 
-- default: `C:\Users\이요셉\.cdsapirc`
+- default: `%USERPROFILE%\\.cdsapirc`
 - alternative: pass `--cds-url` and `--cds-key`
 - alternative: set `CDSAPI_URL` and `CDSAPI_KEY`
 - `--cds-key` may be either the full CDS key string or a personal access token
