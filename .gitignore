@@ -11,3 +11,4 @@ tmp*/
 *.svg
 *.docx
 review/*_extracted.txt
+.multiseed_config_seed_*.json
