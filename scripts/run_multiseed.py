@@ -50,6 +50,16 @@ VARIANT_LABELS = {
     "full_model":                            "Full SA-IDS (M1-M5)",
 }
 
+PLOT_LABELS = {
+    "persistence_24h_baseline": "Persistence\n(24 h)",
+    "climatology_hourly_baseline": "Hourly\nclimatology",
+    "base_gp_only": "GP only\n(M1)",
+    "gp_plus_joint_generative_missingness": "GP + JG\nmissingness\n(M1-M3)",
+    "gp_plus_joint_generative_jvi_training": "GP + JG-JVI\ntraining\n(M1-M3*)",
+    "gp_plus_conformal_reliability": "GP +\nconformal\n(M1+M2+M5)",
+    "full_model": "Full SA-IDS\n(M1-M5)",
+}
+
 # Location of seed-7 cache (prepared data, expensive to recompute)
 SEED7_CACHE_SRC = Path("outputs/ems_patch_v010/cache")
 
@@ -257,57 +267,72 @@ def write_figure(agg: dict, paper_dir: Path) -> None:
     import matplotlib.ticker as mticker
 
     plt.rcParams.update({
-        "font.family": "DejaVu Sans", "font.size": 9,
-        "axes.labelsize": 9, "xtick.labelsize": 8, "ytick.labelsize": 8,
+        "font.family": "DejaVu Sans", "font.size": 10.5,
+        "axes.titlesize": 12.5, "axes.labelsize": 10.5,
+        "xtick.labelsize": 9.2, "ytick.labelsize": 9.5,
+        "axes.titleweight": "bold",
+        "axes.linewidth": 1.0,
+        "axes.edgecolor": "#263238",
         "savefig.dpi": 300, "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.18,
+        "pdf.fonttype": 42, "ps.fonttype": 42,
+        "grid.color": "#b0bec5", "grid.alpha": 0.45,
     })
 
     variants = [v for v in VARIANT_ORDER if v in agg["variants"]]
-    labels   = [VARIANT_LABELS[v] for v in variants]
+    labels   = [PLOT_LABELS.get(v, VARIANT_LABELS[v]) for v in variants]
     COLS     = {"rmse": "#1565c0", "mae": "#2e7d32", "crps": "#c62828"}
-    x        = np.arange(len(variants))
+    y        = np.arange(len(variants))
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharey=False)
+    fig, axes = plt.subplots(1, 3, figsize=(15.8, 6.4), sharey=True)
 
     for ax, metric, col in zip(axes, METRICS, COLS.values()):
         means = [agg["variants"][v]["metrics"].get(metric, {}).get("mean")
                  for v in variants]
         stds  = [agg["variants"][v]["metrics"].get(metric, {}).get("std", 0.0)
                  for v in variants]
-        means_f = [m for m in means if m is not None]
-        stds_f  = stds
+        valid_pairs = [(m, s) for m, s in zip(means, stds) if m is not None]
 
-        bars = ax.bar(x, means, yerr=stds, color=col, alpha=0.82, width=0.6,
-                      capsize=4,
-                      error_kw=dict(lw=1.2, capthick=1.2, ecolor="#424242"),
-                      edgecolor="white")
+        bars = ax.barh(y, means, xerr=stds, color=col, alpha=0.88, height=0.62,
+                       capsize=4.5,
+                       error_kw=dict(lw=1.5, capthick=1.5, ecolor="#263238"),
+                       edgecolor="white", linewidth=0.8)
+        label_offset = (max(m + s for m, s in valid_pairs) if valid_pairs else 1.0) * 0.018
         for bar, mu, sd in zip(bars, means, stds):
             if mu is None:
                 continue
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + (max(stds) or 0) * 0.08 + 0.02,
-                    f"{mu:.3f}\n(+/-{sd:.3f})",
-                    ha="center", va="bottom", fontsize=6.2, linespacing=1.3)
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=7.2)
-        ax.set_ylabel(f"{metric.upper()} (lower is better, deg C)")
+            ax.text(bar.get_width() + sd + label_offset,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{mu:.2f} +/- {sd:.2f}",
+                    ha="left", va="center", fontsize=8.5,
+                    color="#263238")
+        ax.set_xlabel(f"{metric.upper()} (lower is better, deg C)")
         ax.set_title(metric.upper(), fontweight="bold")
-        ax.yaxis.set_minor_locator(mticker.AutoMinorLocator())
-        ax.grid(axis="y", which="major", lw=0.4, alpha=0.5)
-        ax.grid(axis="y", which="minor", lw=0.2, alpha=0.3)
-        ax.set_ylim(bottom=0)
+        ax.xaxis.set_minor_locator(mticker.AutoMinorLocator())
+        ax.grid(axis="x", which="major", lw=0.7)
+        ax.grid(axis="x", which="minor", lw=0.35, alpha=0.25)
+        top = max(m + s for m, s in valid_pairs) * 1.20
+        ax.set_xlim(0, top)
+
+    axes[0].set_yticks(y)
+    axes[0].set_yticklabels(labels, fontsize=9.3, linespacing=1.1)
+    axes[0].invert_yaxis()
+    for ax in axes[1:]:
+        ax.tick_params(axis="y", labelleft=False)
 
     n_seeds = agg["n_seeds"]
     fig.suptitle(
         f"Multi-seed ablation (n={n_seeds} seeds: 7, 11, 19, 23, 29) -- mean +/- std",
-        fontsize=10, y=1.02,
+        fontsize=14, fontweight="bold", y=0.995,
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
 
     path = paper_dir / "fig_multiseed_ablation.pdf"
     fig.savefig(path)
+    png_path = path.with_suffix(".png")
+    fig.savefig(png_path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
+    print(f"  [fig]   {path.name}  {png_path.name}")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────

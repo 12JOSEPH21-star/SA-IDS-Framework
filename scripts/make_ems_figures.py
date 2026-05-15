@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -51,16 +51,23 @@ VARIANT_COLOURS: dict[str, str] = {
 
 plt.rcParams.update({
     "font.family":      "DejaVu Sans",
-    "font.size":        9,
-    "axes.titlesize":   10,
-    "axes.labelsize":   9,
-    "xtick.labelsize":  8,
-    "ytick.labelsize":  8,
-    "legend.fontsize":  8,
+    "font.size":        11,
+    "axes.titlesize":   13,
+    "axes.labelsize":   11,
+    "xtick.labelsize":  10,
+    "ytick.labelsize":  10,
+    "legend.fontsize":  10,
     "figure.dpi":       150,
     "savefig.dpi":      300,
     "savefig.bbox":     "tight",
-    "savefig.pad_inches": 0.05,
+    "savefig.pad_inches": 0.18,
+    "pdf.fonttype":     42,
+    "ps.fonttype":      42,
+    "axes.linewidth":   1.0,
+    "axes.edgecolor":   "#263238",
+    "axes.titleweight": "bold",
+    "grid.color":       "#b0bec5",
+    "grid.alpha":       0.45,
 })
 
 
@@ -70,6 +77,28 @@ def _fmt(v: float | None, decimals: int = 3) -> str:
     if v is None:
         return "—"
     return f"{v:.{decimals}f}"
+
+
+def _wrap_label(label: str, width: int = 17) -> str:
+    return "\n".join(textwrap.wrap(label, width=width, break_long_words=False))
+
+
+PLOT_LABELS: dict[str, str] = {
+    "persistence_24h_baseline": "Persistence\n(24 h)",
+    "climatology_hourly_baseline": "Hourly\nclimatology",
+    "base_gp_only": "GP only\n(M1)",
+    "gp_plus_joint_generative_missingness": "GP + JG\nmissingness\n(M1-M3)",
+    "gp_plus_joint_generative_jvi_training": "GP + JG-JVI\ntraining\n(M1-M3*)",
+    "gp_plus_conformal_reliability": "GP +\nconformal\n(M1+M2+M5)",
+    "full_model": "Full SA-IDS\n(M1-M5)",
+}
+
+
+def _save_figure(fig: plt.Figure, path: Path) -> None:
+    fig.savefig(path)
+    png_path = path.with_suffix(".png")
+    fig.savefig(png_path)
+    print(f"  [fig]   {path.name}  {png_path.name}")
 
 
 def _latex_bold(s: str) -> str:
@@ -254,39 +283,38 @@ def fig_crps_comparison(ablations: dict, outdir: Path) -> None:
     valid = [(l, v, c) for l, v, c in zip(labels, crps, colours) if v is not None]
     labels_v, crps_v, colours_v = zip(*valid)
 
-    fig, ax = plt.subplots(figsize=(7, 3.8))
+    fig, ax = plt.subplots(figsize=(10.2, 5.4))
     y = np.arange(len(labels_v))
-    bars = ax.barh(y, crps_v, color=colours_v, height=0.6, edgecolor="white", linewidth=0.5)
+    bars = ax.barh(y, crps_v, color=colours_v, height=0.64, edgecolor="white", linewidth=0.8)
 
     # reference lines: persistence and climatology
     persist_crps = ablations.get("persistence_24h_baseline", {}).get("metrics", {}).get("crps")
     clim_crps    = ablations.get("climatology_hourly_baseline", {}).get("metrics", {}).get("crps")
     if persist_crps:
-        ax.axvline(persist_crps, color=COL_BASELINE, lw=1.2, ls="--", alpha=0.6, label="Persistence")
+        ax.axvline(persist_crps, color="#616161", lw=1.6, ls="--", alpha=0.85, label="Persistence")
     if clim_crps:
-        ax.axvline(clim_crps,    color=COL_BASELINE, lw=1.2, ls=":",  alpha=0.6, label="Climatology")
+        ax.axvline(clim_crps,    color="#616161", lw=1.6, ls=":",  alpha=0.85, label="Climatology")
 
     # value labels
     for bar, val in zip(bars, crps_v):
-        ax.text(bar.get_width() + 0.05, bar.get_y() + bar.get_height() / 2,
-                f"{val:.3f}", va="center", ha="left", fontsize=7.5)
+        ax.text(bar.get_width() + 0.08, bar.get_y() + bar.get_height() / 2,
+                f"{val:.3f}", va="center", ha="left", fontsize=10, fontweight="bold")
 
     ax.set_yticks(y)
-    ax.set_yticklabels(labels_v)
+    ax.set_yticklabels(labels_v, fontsize=10.5)
     ax.invert_yaxis()  # baselines at top, full model at bottom
     ax.set_xlabel("CRPS (lower is better)")
-    ax.set_title("CRPS by model variant — EMS patch v0.1.0")
+    ax.set_title("CRPS by model variant - EMS patch v0.1.0", pad=12)
     ax.xaxis.set_minor_locator(mticker.AutoMinorLocator())
-    ax.grid(axis="x", which="major", lw=0.4, alpha=0.5)
-    ax.grid(axis="x", which="minor", lw=0.2, alpha=0.3)
-    ax.set_xlim(left=0)
-    ax.legend(loc="lower right", framealpha=0.85)
-    fig.tight_layout()
+    ax.grid(axis="x", which="major", lw=0.7)
+    ax.grid(axis="x", which="minor", lw=0.35, alpha=0.25)
+    ax.set_xlim(left=0, right=max(crps_v) * 1.17)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2, framealpha=0.90)
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
 
     path = outdir / "fig_crps_comparison.pdf"
-    fig.savefig(path)
+    _save_figure(fig, path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
 
 
 # ─── Fig 2: RMSE / MAE / CRPS grouped bars ────────────────────────────────────
@@ -294,7 +322,7 @@ def fig_crps_comparison(ablations: dict, outdir: Path) -> None:
 def fig_rmse_mae_crps(ablations: dict, outdir: Path) -> None:
     keys = [k for k in ABLATION_ORDER if k in ablations
             and ablations[k]["metrics"].get("crps") is not None]
-    labels  = [VARIANT_LABELS[k] for k in keys]
+    labels  = [PLOT_LABELS.get(k, _wrap_label(VARIANT_LABELS[k], 14)) for k in keys]
     rmse_v  = [ablations[k]["metrics"]["rmse"] for k in keys]
     mae_v   = [ablations[k]["metrics"]["mae"]  for k in keys]
     crps_v  = [ablations[k]["metrics"]["crps"] for k in keys]
@@ -303,25 +331,26 @@ def fig_rmse_mae_crps(ablations: dict, outdir: Path) -> None:
     x = np.arange(n)
     w = 0.25
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    ax.bar(x - w, rmse_v, width=w, label="RMSE", color="#1565c0", alpha=0.85)
-    ax.bar(x,     mae_v,  width=w, label="MAE",  color="#2e7d32", alpha=0.85)
-    ax.bar(x + w, crps_v, width=w, label="CRPS", color="#c62828", alpha=0.85)
+    fig, ax = plt.subplots(figsize=(12.5, 6.0))
+    ax.bar(x - w, rmse_v, width=w, label="RMSE", color="#1565c0", alpha=0.88, edgecolor="white", linewidth=0.7)
+    ax.bar(x,     mae_v,  width=w, label="MAE",  color="#2e7d32", alpha=0.88, edgecolor="white", linewidth=0.7)
+    ax.bar(x + w, crps_v, width=w, label="CRPS", color="#c62828", alpha=0.88, edgecolor="white", linewidth=0.7)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=38, ha="right", fontsize=7.5)
+    ax.set_xticklabels(labels, rotation=0, ha="center", fontsize=9.2, linespacing=1.15)
     ax.set_ylabel("Score (lower is better, deg C)")
-    ax.set_title("RMSE / MAE / CRPS by model variant — EMS patch v0.1.0")
+    ax.set_title("RMSE / MAE / CRPS by model variant - EMS patch v0.1.0", pad=12)
     ax.legend(framealpha=0.85)
     ax.yaxis.set_minor_locator(mticker.AutoMinorLocator())
-    ax.grid(axis="y", which="major", lw=0.4, alpha=0.5)
-    ax.grid(axis="y", which="minor", lw=0.2, alpha=0.3)
+    ax.grid(axis="y", which="major", lw=0.7)
+    ax.grid(axis="y", which="minor", lw=0.35, alpha=0.25)
+    ax.set_ylim(0, max(rmse_v + mae_v + crps_v) * 1.12)
+    ax.margins(x=0.02)
     fig.tight_layout()
 
     path = outdir / "fig_rmse_mae_crps.pdf"
-    fig.savefig(path)
+    _save_figure(fig, path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
 
 
 # ─── Fig 3: training-loss curves ──────────────────────────────────────────────
@@ -357,8 +386,8 @@ def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
     mis_cols   = [c for _, _, c in MIS_COMPONENTS]
 
     # ── layout: 2 rows × 2 cols, top row spans both columns ──────────────────
-    fig = plt.figure(figsize=(12, 7))
-    gs  = fig.add_gridspec(2, 2, height_ratios=[1.5, 1], hspace=0.42, wspace=0.32)
+    fig = plt.figure(figsize=(14.2, 8.4))
+    gs  = fig.add_gridspec(2, 2, height_ratios=[1.55, 1], hspace=0.48, wspace=0.36)
     ax_obs  = fig.add_subplot(gs[0, :])   # top — full width
     ax_sta  = fig.add_subplot(gs[1, 0])   # bottom-left
     ax_mis  = fig.add_subplot(gs[1, 1])   # bottom-right
@@ -371,41 +400,41 @@ def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
     C_MASK  = "#78909c"
 
     if len(steps):
-        ax_obs.plot(steps, obs_total, color=C_TOTAL, lw=2.0,  label="Total",         zorder=4)
+        ax_obs.plot(steps, obs_total, color=C_TOTAL, lw=2.6,  label="Total",         zorder=4)
         if len(obs_ss):
-            ax_obs.plot(steps, obs_ss,    color=C_SS,    lw=1.3, ls="--", label="Self-supervised", zorder=3)
+            ax_obs.plot(steps, obs_ss,    color=C_SS,    lw=1.7, ls="--", label="Self-supervised", zorder=3)
         if len(obs_recon):
-            ax_obs.fill_between(steps, obs_recon, alpha=0.18, color=C_RECON, label="Reconstruction")
-            ax_obs.plot(steps, obs_recon, color=C_RECON, lw=0.9, ls=":")
+            ax_obs.fill_between(steps, obs_recon, alpha=0.20, color=C_RECON, label="Reconstruction")
+            ax_obs.plot(steps, obs_recon, color=C_RECON, lw=1.2, ls=":")
         if len(obs_phys):
-            ax_obs.fill_between(steps, obs_phys, alpha=0.13, color=C_PHYS, label="Physics")
-            ax_obs.plot(steps, obs_phys,  color=C_PHYS,  lw=0.9, ls="-.")
+            ax_obs.fill_between(steps, obs_phys, alpha=0.16, color=C_PHYS, label="Physics")
+            ax_obs.plot(steps, obs_phys,  color=C_PHYS,  lw=1.2, ls="-.")
 
         ax_obs.set_yscale("log")
         ax_obs.set_xlabel("Training step (observation model, epoch 1)", labelpad=4)
         ax_obs.set_ylabel("Loss (log scale)")
-        ax_obs.grid(which="major", lw=0.4, alpha=0.5)
-        ax_obs.grid(which="minor", lw=0.2, alpha=0.25)
+        ax_obs.grid(which="major", lw=0.7)
+        ax_obs.grid(which="minor", lw=0.35, alpha=0.25)
         ax_obs.xaxis.set_minor_locator(mticker.AutoMinorLocator())
 
         # curriculum mask probability on right axis
         if len(obs_mask_p):
             ax_r = ax_obs.twinx()
-            ax_r.plot(steps, obs_mask_p * 100, color=C_MASK, lw=1.1, ls=(0, (3, 2)), alpha=0.8,
+            ax_r.plot(steps, obs_mask_p * 100, color=C_MASK, lw=1.5, ls=(0, (3, 2)), alpha=0.9,
                       label="Mask prob. (%)")
             ax_r.set_ylabel("Corruption mask prob. (%)", color=C_MASK, labelpad=4)
-            ax_r.tick_params(axis="y", colors=C_MASK, labelsize=7.5)
+            ax_r.tick_params(axis="y", colors=C_MASK, labelsize=9.5)
             ax_r.yaxis.set_minor_locator(mticker.AutoMinorLocator())
             ax_r.set_ylim(0, max(obs_mask_p) * 100 * 1.25)
             # combine legends
             handles_l, labels_l = ax_obs.get_legend_handles_labels()
             handles_r, labels_r = ax_r.get_legend_handles_labels()
             ax_obs.legend(handles_l + handles_r, labels_l + labels_r,
-                          fontsize=7.5, loc="upper right", ncol=2, framealpha=0.88)
+                          fontsize=9.2, loc="upper right", ncol=2, framealpha=0.90)
         else:
-            ax_obs.legend(fontsize=7.5, loc="upper right", framealpha=0.88)
+            ax_obs.legend(fontsize=9.2, loc="upper right", framealpha=0.90)
 
-    ax_obs.set_title("(A) Observation model — training loss components", loc="left", fontsize=9, fontweight="bold")
+    ax_obs.set_title("(A) Observation model - training loss components", loc="left", fontsize=12, fontweight="bold")
 
     # ── panel B: state model component breakdown (horizontal bar) ────────────
     if sta_gp is not None and sta_mis is not None:
@@ -417,16 +446,16 @@ def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
         for bar, val in zip(bars, b_vals):
             x_label = bar.get_width() * 1.03
             ax_sta.text(x_label, bar.get_y() + bar.get_height() / 2,
-                        f"{val:,.1f}", va="center", ha="left", fontsize=8)
+                        f"{val:,.1f}", va="center", ha="left", fontsize=10, fontweight="bold")
         ax_sta.set_yticks(y_pos)
         ax_sta.set_yticklabels(b_labels)
         ax_sta.set_xscale("log")
-        ax_sta.set_xlabel("−ELBO (epoch 1, log scale)")
+        ax_sta.set_xlabel("Negative ELBO (epoch 1, log scale)")
         if sta_total is not None:
             ax_sta.set_title(f"(B) State model  [total: {sta_total:,.1f}]",
-                             loc="left", fontsize=9, fontweight="bold")
-        ax_sta.grid(axis="x", which="major", lw=0.4, alpha=0.5)
-        ax_sta.grid(axis="x", which="minor", lw=0.2, alpha=0.25)
+                             loc="left", fontsize=12, fontweight="bold")
+        ax_sta.grid(axis="x", which="major", lw=0.7)
+        ax_sta.grid(axis="x", which="minor", lw=0.35, alpha=0.25)
 
     # ── panel C: missingness ELBO component breakdown ─────────────────────────
     valid_mis = [(l, v, c) for l, v, c in zip(mis_labels, mis_vals, mis_cols) if v is not None]
@@ -437,23 +466,23 @@ def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
         for bar, val in zip(bars, vv):
             ax_mis.text(bar.get_width() * 1.01, bar.get_y() + bar.get_height() / 2,
                         f"{val:.4f}" if val < 1 else f"{val:,.2f}",
-                        va="center", ha="left", fontsize=8)
+                        va="center", ha="left", fontsize=10, fontweight="bold")
         ax_mis.set_yticks(y_pos)
         ax_mis.set_yticklabels(vl)
         ax_mis.set_xlabel("Loss (epoch 1)")
         mis_total = mis_h.get("loss", [None])[0]
         title_str = f"(C) Missingness ELBO  [total: {mis_total:.2f}]" if mis_total else "(C) Missingness ELBO"
-        ax_mis.set_title(title_str, loc="left", fontsize=9, fontweight="bold")
+        ax_mis.set_title(title_str, loc="left", fontsize=12, fontweight="bold")
         ax_mis.xaxis.set_minor_locator(mticker.AutoMinorLocator())
-        ax_mis.grid(axis="x", which="major", lw=0.4, alpha=0.5)
-        ax_mis.grid(axis="x", which="minor", lw=0.2, alpha=0.25)
+        ax_mis.grid(axis="x", which="major", lw=0.7)
+        ax_mis.grid(axis="x", which="minor", lw=0.35, alpha=0.25)
 
-    fig.suptitle("Training loss — EMS patch v0.1.0", fontsize=10, y=1.01)
+    fig.suptitle("Training loss - EMS patch v0.1.0", fontsize=14, fontweight="bold", y=0.995)
+    fig.tight_layout(rect=[0, 0, 1, 0.965])
 
     path = outdir / "fig_training_loss.pdf"
-    fig.savefig(path)
+    _save_figure(fig, path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
 
 
 # ─── Fig 4: coverage / interval-width ─────────────────────────────────────────
@@ -477,44 +506,44 @@ def fig_coverage_width(ablations: dict, base_metrics: dict, outdir: Path) -> Non
     if not labels:
         return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.5, 3.4))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.6, 4.9))
     x = np.arange(len(labels))
     w = 0.5
 
     # coverage panel
-    bars1 = ax1.bar(x, covs, color=cols, alpha=0.85, width=w, edgecolor="white")
-    ax1.axhline(90.0, color="#212121", lw=1.4, ls="--", label="Target 90%", zorder=5)
+    bars1 = ax1.bar(x, covs, color=cols, alpha=0.90, width=w, edgecolor="white", linewidth=0.8)
+    ax1.axhline(90.0, color="#212121", lw=1.7, ls="--", label="Target 90%", zorder=5)
     for bar, val in zip(bars1, covs):
         ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
-                 f"{val:.2f}%", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                 f"{val:.2f}%", ha="center", va="bottom", fontsize=10, fontweight="bold")
     ax1.set_xticks(x)
-    ax1.set_xticklabels(labels, fontsize=8)
+    ax1.set_xticklabels(labels, fontsize=9.5, linespacing=1.15)
     ax1.set_ylabel("Coverage (%)")
     ax1.set_title("Empirical coverage")
-    ax1.set_ylim(85, 97)
-    ax1.legend(fontsize=8)
+    ax1.set_ylim(85, max(97, max(covs) + 2.4))
+    ax1.legend(fontsize=9.5)
     ax1.yaxis.set_minor_locator(mticker.AutoMinorLocator())
-    ax1.grid(axis="y", which="major", lw=0.4, alpha=0.5)
+    ax1.grid(axis="y", which="major", lw=0.7)
 
     # interval width panel
-    bars2 = ax2.bar(x, iws, color=cols, alpha=0.85, width=w, edgecolor="white")
+    bars2 = ax2.bar(x, iws, color=cols, alpha=0.90, width=w, edgecolor="white", linewidth=0.8)
     for bar, val in zip(bars2, iws):
         ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
-                 f"{val:.2f}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+                 f"{val:.2f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
     ax2.set_xticks(x)
-    ax2.set_xticklabels(labels, fontsize=8)
+    ax2.set_xticklabels(labels, fontsize=9.5, linespacing=1.15)
     ax2.set_ylabel("Interval width (deg C)")
     ax2.set_title("Prediction interval width")
     ax2.yaxis.set_minor_locator(mticker.AutoMinorLocator())
-    ax2.grid(axis="y", which="major", lw=0.4, alpha=0.5)
+    ax2.grid(axis="y", which="major", lw=0.7)
+    ax2.set_ylim(0, max(iws) * 1.18)
 
-    fig.suptitle("Conformal calibration — EMS patch v0.1.0", y=1.02)
+    fig.suptitle("Conformal calibration - EMS patch v0.1.0", fontsize=13, fontweight="bold", y=1.02)
     fig.tight_layout()
 
     path = outdir / "fig_coverage_width.pdf"
-    fig.savefig(path)
+    _save_figure(fig, path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
 
 
 # ─── Fig 5: curriculum mask probability ───────────────────────────────────────
@@ -535,9 +564,8 @@ def fig_curriculum(fit_summary: dict, outdir: Path) -> None:
     fig.tight_layout()
 
     path = outdir / "fig_curriculum.pdf"
-    fig.savefig(path)
+    _save_figure(fig, path)
     plt.close(fig)
-    print(f"  [fig]   {path.name}")
 
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -569,6 +597,7 @@ def main() -> None:
     fig_rmse_mae_crps(ablations, outdir)
     fig_training_loss(fit_summary, outdir)
     fig_coverage_width(ablations, base_metrics, outdir)
+    fig_curriculum(fit_summary, outdir)
 
     print("\nDone.")
 
