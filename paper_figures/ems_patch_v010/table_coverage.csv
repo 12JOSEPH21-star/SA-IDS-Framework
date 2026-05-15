@@ -1,0 +1,4 @@
+variant,coverage,interval_width,target
+Full SA-IDS (base metrics),0.9001,25.157,0.90
+GP + Conformal (M1+M2+M5),0.9165,31.558,0.90
+Full SA-IDS ablation,0.9019,28.172,0.90

@@ -24,9 +24,9 @@ VARIANT_LABELS: dict[str, str] = {
     "climatology_hourly_baseline":           "Climatology (hourly)",
     "base_gp_only":                          "GP only (M1)",
     "gp_plus_joint_generative_missingness":  "GP + JG-missingness (M1+M2+M3)",
-    "gp_plus_joint_generative_jvi_training": "GP + JG-JVI training (M1+M2+M3†)",
+    "gp_plus_joint_generative_jvi_training": "GP + JG-JVI training (M1+M2+M3*)",
     "gp_plus_conformal_reliability":         "GP + Conformal (M1+M2+M5)",
-    "full_model":                            "Full SA-IDS (M1–M5)",
+    "full_model":                            "Full SA-IDS (M1-M5)",
 }
 
 ABLATION_ORDER = list(VARIANT_LABELS.keys())
@@ -273,7 +273,8 @@ def fig_crps_comparison(ablations: dict, outdir: Path) -> None:
 
     ax.set_yticks(y)
     ax.set_yticklabels(labels_v)
-    ax.set_xlabel("CRPS (↓ better)")
+    ax.invert_yaxis()  # baselines at top, full model at bottom
+    ax.set_xlabel("CRPS (lower is better)")
     ax.set_title("CRPS by model variant — EMS patch v0.1.0")
     ax.xaxis.set_minor_locator(mticker.AutoMinorLocator())
     ax.grid(axis="x", which="major", lw=0.4, alpha=0.5)
@@ -308,8 +309,8 @@ def fig_rmse_mae_crps(ablations: dict, outdir: Path) -> None:
     ax.bar(x + w, crps_v, width=w, label="CRPS", color="#c62828", alpha=0.85)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=22, ha="right", fontsize=7.5)
-    ax.set_ylabel("Score (↓ better, °C)")
+    ax.set_xticklabels(labels, rotation=38, ha="right", fontsize=7.5)
+    ax.set_ylabel("Score (lower is better, deg C)")
     ax.set_title("RMSE / MAE / CRPS by model variant — EMS patch v0.1.0")
     ax.legend(framealpha=0.85)
     ax.yaxis.set_minor_locator(mticker.AutoMinorLocator())
@@ -326,55 +327,128 @@ def fig_rmse_mae_crps(ablations: dict, outdir: Path) -> None:
 # ─── Fig 3: training-loss curves ──────────────────────────────────────────────
 
 def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
-    obs_h  = fit_summary.get("observation_history", {})
-    mis_h  = fit_summary.get("missingness_history", {})
-    sta_h  = fit_summary.get("state_history", {})
+    obs_h = fit_summary.get("observation_history", {})
+    mis_h = fit_summary.get("missingness_history", {})
+    sta_h = fit_summary.get("state_history", {})
 
-    obs_loss  = obs_h.get("loss", [])
-    obs_ss    = obs_h.get("self_supervised_loss", [])
-    obs_recon = obs_h.get("reconstruction_loss", [])
-    mis_loss  = mis_h.get("loss", [])
-    sta_loss  = sta_h.get("loss", [])
+    # --- observation series (25 steps) ---
+    steps = np.arange(1, len(obs_h.get("loss", [])) + 1)
+    obs_total  = np.array(obs_h.get("loss", []))
+    obs_ss     = np.array(obs_h.get("self_supervised_loss", []))
+    obs_recon  = np.array(obs_h.get("reconstruction_loss", []))
+    obs_phys   = np.array(obs_h.get("physics_loss", []))
+    obs_mask_p = np.array(obs_h.get("curriculum_mask_probability", []))
 
-    fig, axes = plt.subplots(1, 3, figsize=(11, 3.4))
+    # --- state components (epoch 1) ---
+    sta_total  = sta_h.get("loss",                 [None])[0]
+    sta_gp     = sta_h.get("state_loss",           [None])[0]
+    sta_mis    = sta_h.get("joint_missingness_loss",[None])[0]
 
-    # panel 1: observation model
-    ax = axes[0]
-    if obs_loss:
-        steps = np.arange(1, len(obs_loss) + 1)
-        ax.plot(steps, obs_loss,  label="Total",       color="#1565c0", lw=1.4)
-        if obs_ss:
-            ax.plot(steps, obs_ss,  label="Self-sup.",  color="#42a5f5", lw=1.0, ls="--")
-        if obs_recon:
-            ax.plot(steps[:len(obs_recon)], obs_recon,
-                    label="Recon.",    color="#ef9a9a", lw=1.0, ls=":")
-    ax.set_xlabel("Training step")
-    ax.set_ylabel("Loss")
-    ax.set_title("Observation model")
-    ax.legend(fontsize=7)
-    ax.grid(lw=0.35, alpha=0.5)
-    ax.set_yscale("log")
+    # --- missingness ELBO components (epoch 1) ---
+    MIS_COMPONENTS = [
+        ("mis_loss",        mis_h.get("missingness_loss",          [None])[0], "#4caf50"),
+        ("recon_loss",      mis_h.get("reconstruction_loss",       [None])[0], "#81c784"),
+        ("kl",              mis_h.get("kl_loss",                   [None])[0], "#f44336"),
+        ("health_kl",       mis_h.get("health_kl_loss",            [None])[0], "#ef9a9a"),
+        ("health_recon",    mis_h.get("health_reconstruction_loss",[None])[0], "#ffcc80"),
+    ]
+    mis_labels = ["Selection\nNLL", "Recon.\nloss", "KL", "Health\nKL", "Health\nrecon."]
+    mis_vals   = [v for _, v, _ in MIS_COMPONENTS]
+    mis_cols   = [c for _, _, c in MIS_COMPONENTS]
 
-    # panel 2: missingness model (single epoch → single point or short list)
-    ax = axes[1]
-    if mis_loss:
-        ax.bar(np.arange(1, len(mis_loss) + 1), mis_loss, color="#388e3c", alpha=0.85)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("ELBO loss")
-        ax.set_title("Missingness model (ELBO)")
-    ax.grid(axis="y", lw=0.35, alpha=0.5)
+    # ── layout: 2 rows × 2 cols, top row spans both columns ──────────────────
+    fig = plt.figure(figsize=(12, 7))
+    gs  = fig.add_gridspec(2, 2, height_ratios=[1.5, 1], hspace=0.42, wspace=0.32)
+    ax_obs  = fig.add_subplot(gs[0, :])   # top — full width
+    ax_sta  = fig.add_subplot(gs[1, 0])   # bottom-left
+    ax_mis  = fig.add_subplot(gs[1, 1])   # bottom-right
 
-    # panel 3: state model
-    ax = axes[2]
-    if sta_loss:
-        ax.bar(np.arange(1, len(sta_loss) + 1), sta_loss, color="#7b1fa2", alpha=0.85)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Negative ELBO")
-        ax.set_title("State model (−ELBO)")
-    ax.grid(axis="y", lw=0.35, alpha=0.5)
+    # ── panel A: observation model curve with curriculum on twin axis ─────────
+    C_TOTAL = "#1565c0"
+    C_SS    = "#42a5f5"
+    C_RECON = "#e57373"
+    C_PHYS  = "#ff8f00"
+    C_MASK  = "#78909c"
 
-    fig.suptitle("Training loss curves — EMS patch v0.1.0", y=1.01)
-    fig.tight_layout()
+    if len(steps):
+        ax_obs.plot(steps, obs_total, color=C_TOTAL, lw=2.0,  label="Total",         zorder=4)
+        if len(obs_ss):
+            ax_obs.plot(steps, obs_ss,    color=C_SS,    lw=1.3, ls="--", label="Self-supervised", zorder=3)
+        if len(obs_recon):
+            ax_obs.fill_between(steps, obs_recon, alpha=0.18, color=C_RECON, label="Reconstruction")
+            ax_obs.plot(steps, obs_recon, color=C_RECON, lw=0.9, ls=":")
+        if len(obs_phys):
+            ax_obs.fill_between(steps, obs_phys, alpha=0.13, color=C_PHYS, label="Physics")
+            ax_obs.plot(steps, obs_phys,  color=C_PHYS,  lw=0.9, ls="-.")
+
+        ax_obs.set_yscale("log")
+        ax_obs.set_xlabel("Training step (observation model, epoch 1)", labelpad=4)
+        ax_obs.set_ylabel("Loss (log scale)")
+        ax_obs.grid(which="major", lw=0.4, alpha=0.5)
+        ax_obs.grid(which="minor", lw=0.2, alpha=0.25)
+        ax_obs.xaxis.set_minor_locator(mticker.AutoMinorLocator())
+
+        # curriculum mask probability on right axis
+        if len(obs_mask_p):
+            ax_r = ax_obs.twinx()
+            ax_r.plot(steps, obs_mask_p * 100, color=C_MASK, lw=1.1, ls=(0, (3, 2)), alpha=0.8,
+                      label="Mask prob. (%)")
+            ax_r.set_ylabel("Corruption mask prob. (%)", color=C_MASK, labelpad=4)
+            ax_r.tick_params(axis="y", colors=C_MASK, labelsize=7.5)
+            ax_r.yaxis.set_minor_locator(mticker.AutoMinorLocator())
+            ax_r.set_ylim(0, max(obs_mask_p) * 100 * 1.25)
+            # combine legends
+            handles_l, labels_l = ax_obs.get_legend_handles_labels()
+            handles_r, labels_r = ax_r.get_legend_handles_labels()
+            ax_obs.legend(handles_l + handles_r, labels_l + labels_r,
+                          fontsize=7.5, loc="upper right", ncol=2, framealpha=0.88)
+        else:
+            ax_obs.legend(fontsize=7.5, loc="upper right", framealpha=0.88)
+
+    ax_obs.set_title("(A) Observation model — training loss components", loc="left", fontsize=9, fontweight="bold")
+
+    # ── panel B: state model component breakdown (horizontal bar) ────────────
+    if sta_gp is not None and sta_mis is not None:
+        b_labels = ["GP sparse\nELBO", "Joint\nmissingness"]
+        b_vals   = [sta_gp, sta_mis]
+        b_cols   = ["#7b1fa2", "#ce93d8"]
+        y_pos    = np.arange(len(b_labels))
+        bars     = ax_sta.barh(y_pos, b_vals, color=b_cols, height=0.5, edgecolor="white")
+        for bar, val in zip(bars, b_vals):
+            x_label = bar.get_width() * 1.03
+            ax_sta.text(x_label, bar.get_y() + bar.get_height() / 2,
+                        f"{val:,.1f}", va="center", ha="left", fontsize=8)
+        ax_sta.set_yticks(y_pos)
+        ax_sta.set_yticklabels(b_labels)
+        ax_sta.set_xscale("log")
+        ax_sta.set_xlabel("−ELBO (epoch 1, log scale)")
+        if sta_total is not None:
+            ax_sta.set_title(f"(B) State model  [total: {sta_total:,.1f}]",
+                             loc="left", fontsize=9, fontweight="bold")
+        ax_sta.grid(axis="x", which="major", lw=0.4, alpha=0.5)
+        ax_sta.grid(axis="x", which="minor", lw=0.2, alpha=0.25)
+
+    # ── panel C: missingness ELBO component breakdown ─────────────────────────
+    valid_mis = [(l, v, c) for l, v, c in zip(mis_labels, mis_vals, mis_cols) if v is not None]
+    if valid_mis:
+        vl, vv, vc = zip(*valid_mis)
+        y_pos = np.arange(len(vl))
+        bars  = ax_mis.barh(y_pos, vv, color=vc, height=0.5, edgecolor="white")
+        for bar, val in zip(bars, vv):
+            ax_mis.text(bar.get_width() * 1.01, bar.get_y() + bar.get_height() / 2,
+                        f"{val:.4f}" if val < 1 else f"{val:,.2f}",
+                        va="center", ha="left", fontsize=8)
+        ax_mis.set_yticks(y_pos)
+        ax_mis.set_yticklabels(vl)
+        ax_mis.set_xlabel("Loss (epoch 1)")
+        mis_total = mis_h.get("loss", [None])[0]
+        title_str = f"(C) Missingness ELBO  [total: {mis_total:.2f}]" if mis_total else "(C) Missingness ELBO"
+        ax_mis.set_title(title_str, loc="left", fontsize=9, fontweight="bold")
+        ax_mis.xaxis.set_minor_locator(mticker.AutoMinorLocator())
+        ax_mis.grid(axis="x", which="major", lw=0.4, alpha=0.5)
+        ax_mis.grid(axis="x", which="minor", lw=0.2, alpha=0.25)
+
+    fig.suptitle("Training loss — EMS patch v0.1.0", fontsize=10, y=1.01)
 
     path = outdir / "fig_training_loss.pdf"
     fig.savefig(path)
@@ -386,41 +460,55 @@ def fig_training_loss(fit_summary: dict, outdir: Path) -> None:
 
 def fig_coverage_width(ablations: dict, base_metrics: dict, outdir: Path) -> None:
     entries = [
-        ("Full SA-IDS\n(base)",           base_metrics),
-        ("GP + Conformal\n(M1+M2+M5)",    ablations.get("gp_plus_conformal_reliability", {}).get("metrics", {})),
-        ("Full SA-IDS\n(ablation)",        ablations.get("full_model", {}).get("metrics", {})),
+        ("Full SA-IDS\n(base)",        "#c62828", base_metrics),
+        ("GP + Conformal\n(M1+M2+M5)", "#7b1fa2", ablations.get("gp_plus_conformal_reliability", {}).get("metrics", {})),
+        ("Full SA-IDS\n(ablation)",    "#e57373", ablations.get("full_model", {}).get("metrics", {})),
     ]
-    labels, covs, iws = [], [], []
-    for lbl, m in entries:
+    labels, cols, covs, iws = [], [], [], []
+    for lbl, col, m in entries:
         c = m.get("coverage")
         w = m.get("interval_width")
         if c is not None and w is not None:
             labels.append(lbl)
+            cols.append(col)
             covs.append(c * 100.0)
             iws.append(w)
 
     if not labels:
         return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3.2))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.5, 3.4))
     x = np.arange(len(labels))
+    w = 0.5
 
-    ax1.bar(x, covs, color=["#c62828", "#7b1fa2", "#c62828"], alpha=0.82, width=0.5)
-    ax1.axhline(90.0, color="k", lw=1.2, ls="--", label="Target 90%")
-    ax1.set_xticks(x); ax1.set_xticklabels(labels, fontsize=8)
+    # coverage panel
+    bars1 = ax1.bar(x, covs, color=cols, alpha=0.85, width=w, edgecolor="white")
+    ax1.axhline(90.0, color="#212121", lw=1.4, ls="--", label="Target 90%", zorder=5)
+    for bar, val in zip(bars1, covs):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
+                 f"{val:.2f}%", ha="center", va="bottom", fontsize=8, fontweight="bold")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels, fontsize=8)
     ax1.set_ylabel("Coverage (%)")
     ax1.set_title("Empirical coverage")
     ax1.set_ylim(85, 97)
     ax1.legend(fontsize=8)
-    ax1.grid(axis="y", lw=0.35, alpha=0.5)
+    ax1.yaxis.set_minor_locator(mticker.AutoMinorLocator())
+    ax1.grid(axis="y", which="major", lw=0.4, alpha=0.5)
 
-    ax2.bar(x, iws, color=["#c62828", "#7b1fa2", "#c62828"], alpha=0.82, width=0.5)
-    ax2.set_xticks(x); ax2.set_xticklabels(labels, fontsize=8)
-    ax2.set_ylabel("Interval width (°C)")
+    # interval width panel
+    bars2 = ax2.bar(x, iws, color=cols, alpha=0.85, width=w, edgecolor="white")
+    for bar, val in zip(bars2, iws):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
+                 f"{val:.2f}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(labels, fontsize=8)
+    ax2.set_ylabel("Interval width (deg C)")
     ax2.set_title("Prediction interval width")
-    ax2.grid(axis="y", lw=0.35, alpha=0.5)
+    ax2.yaxis.set_minor_locator(mticker.AutoMinorLocator())
+    ax2.grid(axis="y", which="major", lw=0.4, alpha=0.5)
 
-    fig.suptitle("Conformal calibration — EMS patch v0.1.0", y=1.01)
+    fig.suptitle("Conformal calibration — EMS patch v0.1.0", y=1.02)
     fig.tight_layout()
 
     path = outdir / "fig_coverage_width.pdf"
@@ -457,7 +545,7 @@ def fig_curriculum(fit_summary: dict, outdir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate EMS figures from summary.json")
     parser.add_argument("--summary", default="outputs/ems_patch_v010/summary.json")
-    parser.add_argument("--outdir",  default="outputs/ems_patch_v010/figures")
+    parser.add_argument("--outdir",  default="paper_figures/ems_patch_v010")
     args = parser.parse_args()
 
     summary_path = Path(args.summary)
@@ -481,7 +569,6 @@ def main() -> None:
     fig_rmse_mae_crps(ablations, outdir)
     fig_training_loss(fit_summary, outdir)
     fig_coverage_width(ablations, base_metrics, outdir)
-    fig_curriculum(fit_summary, outdir)
 
     print("\nDone.")
 

@@ -1,0 +1,16 @@
+\begin{table}[ht]
+\centering
+\caption{SA-IDS (full model: base metrics) vs.\ statistical and GP baselines.
+         $\Delta$\% = relative improvement (lower is better for all metrics).}
+\label{tab:baseline_comparison}
+\begin{tabular}{lrrr|rrr|rrr}
+\toprule
+Baseline & \multicolumn{3}{c|}{Baseline} & \multicolumn{3}{c|}{SA-IDS} & \multicolumn{3}{c}{$\Delta$\% $\downarrow$} \\
+ & RMSE & MAE & CRPS & RMSE & MAE & CRPS & RMSE & MAE & CRPS \\
+\midrule
+Persistence (24 h) & 14.611 & 8.717 & 8.717 & 11.606 & 7.844 & 7.536 & 20.6\% & 10.0\% & 13.5\% \\
+Climatology (hourly) & 15.725 & 8.858 & 8.858 & 11.606 & 7.844 & 7.536 & 26.2\% & 11.4\% & 14.9\% \\
+GP only (M1) & 14.524 & 10.275 & 9.829 & 11.606 & 7.844 & 7.536 & 20.1\% & 23.7\% & 23.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}

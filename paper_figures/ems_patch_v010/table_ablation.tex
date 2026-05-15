@@ -1,0 +1,21 @@
+\begin{table}[ht]
+\centering
+\caption{Ablation study: predictive performance on the held-out evaluation set
+         (n\,=\,4{,}096 rows). Bold: best in column.}
+\label{tab:ablation}
+\begin{tabular}{lrrr}
+\toprule
+Model variant & RMSE & MAE & CRPS \\
+\midrule
+Persistence (24 h) & 14.611 & 8.717 & 8.717 \\
+Climatology (hourly) & 15.725 & 8.858 & 8.858 \\
+\midrule
+
+GP only (M1) & 14.524 & 10.275 & 9.829 \\
+GP + JG-missingness (M1+M2+M3) & \textbf{12.048} & \textbf{7.945} & \textbf{7.505} \\
+GP + JG-JVI training (M1+M2+M3*) & 13.219 & 8.860 & 8.635 \\
+GP + Conformal (M1+M2+M5) & 14.502 & 10.240 & 9.801 \\
+Full SA-IDS (M1-M5) & 14.305 & 9.570 & 9.108 \\
+\bottomrule
+\end{tabular}
+\end{table}
