@@ -1,8 +1,8 @@
 variant,label,RMSE_mean,RMSE_std,MAE_mean,MAE_std,CRPS_mean,CRPS_std
 persistence_24h_baseline,Persistence (24 h),14.611,0.000,8.717,0.000,8.717,0.000
 climatology_hourly_baseline,Climatology (hourly),15.725,0.000,8.858,0.000,8.858,0.000
-base_gp_only,GP only (M1),14.513,0.024,10.256,0.038,9.813,0.036
-gp_plus_joint_generative_missingness,GP + JG-missingness (M1+M2+M3),12.285,0.530,8.116,0.444,7.696,0.481
-gp_plus_joint_generative_jvi_training,GP + JG-JVI training (M1+M2+M3*),12.812,0.575,8.536,0.562,8.161,0.574
-gp_plus_conformal_reliability,GP + Conformal (M1+M2+M5),14.513,0.013,10.257,0.021,9.813,0.019
-full_model,Full SA-IDS (M1-M5),13.474,0.879,8.882,0.768,8.547,0.761
+base_gp_only,GP only (M1),14.520,0.026,10.267,0.041,9.821,0.036
+gp_plus_joint_generative_missingness,GP + JG-missingness (M1+M2+M3),12.229,0.476,8.020,0.441,7.591,0.478
+gp_plus_joint_generative_jvi_training,GP + JG-JVI training (M1+M2+M3*),12.789,0.501,8.579,0.496,8.198,0.504
+gp_plus_conformal_reliability,GP + Conformal (M1+M2+M5),14.512,0.011,10.256,0.018,9.811,0.016
+full_model,Full SA-IDS (M1-M5),13.547,0.779,9.144,0.887,8.793,0.858
