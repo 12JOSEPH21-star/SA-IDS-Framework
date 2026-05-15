@@ -1,0 +1,121 @@
+{
+  "preset": "isd_hourly",
+  "data": {
+    "data_path": "isd_hourly.csv",
+    "timestamp_column": "timestamp",
+    "station_id_column": "station_id",
+    "target_column": "air_temperature",
+    "latitude_column": "latitude",
+    "longitude_column": "longitude",
+    "context_columns": [
+      "dew_point_temperature",
+      "sea_level_pressure",
+      "wind_speed"
+    ],
+    "continuous_metadata_columns": [
+      "elevation",
+      "station_age_years"
+    ],
+    "cost_column": "sensor_cost",
+    "sensor_type_column": "sensor_type",
+    "sensor_group_column": "sensor_group",
+    "sensor_modality_column": "sensor_modality",
+    "installation_environment_column": "site_type",
+    "maintenance_state_column": "maintenance_state",
+    "train_ratio": 0.7,
+    "calibration_ratio": 0.15,
+    "split_strategy": "temporal"
+  },
+  "pipeline": {
+    "state": {
+      "input_dim": 7,
+      "inducing_points": 32,
+      "spatial_dims": [
+        0,
+        1
+      ],
+      "temporal_dims": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "observation": {
+      "threshold_mode": "stddev",
+      "stddev_multiplier": 2.5,
+      "quantile_level": 0.95,
+      "hybrid_floor": 0.5,
+      "use_observation_noise": true,
+      "require_calibration_split_for_quantile": true
+    },
+    "missingness": {
+      "mode": "selection",
+      "include_s": true,
+      "include_dynamic_residual": true,
+      "include_dynamic_threshold": true,
+      "include_normalized_residual": true,
+      "include_dynamic_feature_availability": true,
+      "use_dynamic_features_for_training": true,
+      "use_dynamic_features_for_prediction": true,
+      "use_dynamic_features_for_policy": false,
+      "hidden_dim": 32,
+      "trunk_depth": 2
+    },
+    "policy": {
+      "utility_surrogate": "mi_proxy",
+      "selection_mode": "budget",
+      "spatial_distance_dims": [
+        0,
+        1
+      ],
+      "observation_noise": 0.05,
+      "redundancy_strength": 0.95
+    },
+    "reliability": {
+      "prediction_target": "observation"
+    },
+    "state_training": {
+      "epochs": 5,
+      "batch_size": 64,
+      "learning_rate": 0.01
+    },
+    "missingness_training": {
+      "epochs": 5,
+      "batch_size": 128,
+      "learning_rate": 0.001
+    },
+    "use_m2": true,
+    "use_m3": true,
+    "use_m5": true,
+    "homogeneous_missingness": false,
+    "sensor_conditional_missingness": true
+  },
+  "run": {
+    "variant_names": [
+      "base_gp_only",
+      "gp_plus_dynamic_silence",
+      "gp_plus_homogeneous_missingness",
+      "gp_plus_sensor_conditional_missingness",
+      "gp_plus_pattern_mixture_missingness",
+      "gp_plus_conformal_reliability",
+      "variance_policy_baseline",
+      "full_model"
+    ],
+    "sensitivity_logit_scales": [
+      0.5,
+      1.0,
+      1.5,
+      2.0
+    ],
+    "max_selections": 3,
+    "seed": 7,
+    "deterministic_algorithms": false,
+    "torch_num_threads": 4,
+    "matmul_precision": "high",
+    "prediction_batch_size": 512,
+    "benchmark_expansion_factor": 4
+  },
+  "output_path": "outputs/framework_run/summary.json"
+}

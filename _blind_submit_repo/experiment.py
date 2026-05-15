@@ -57,11 +57,6 @@ class TabularDataConfig:
         calibration_ratio: Proportion of timestamps or rows used for calibration.
         split_strategy: Either `"temporal"` or `"row"`.
         timestamp_format: Optional explicit timestamp format.
-        standardize_inputs: When True, z-score-normalise latitude, longitude,
-            elapsed_hours, and any extra_input_columns using training-split
-            statistics. The trigonometric time features (sin/cos hour/day)
-            are already bounded in [-1, 1] and are left unchanged.
-            Defaults to False to preserve existing results.
         device: Tensor device.
         dtype: Tensor dtype for float tensors.
     """
@@ -87,7 +82,6 @@ class TabularDataConfig:
     calibration_ratio: float = 0.15
     split_strategy: str = "temporal"
     timestamp_format: str | None = None
-    standardize_inputs: bool = False
     device: str = "cpu"
     dtype: torch.dtype = torch.float32
 
@@ -392,33 +386,6 @@ class WeatherDatasetAdapter:
         train_batch = self._build_batch(encoded, split_indices["train"])
         calibration_batch = self._build_batch(encoded, split_indices["calibration"])
         evaluation_batch = self._build_batch(encoded, split_indices["evaluation"])
-
-        if self.config.standardize_inputs:
-            # Continuous columns: lat(0), lon(1), elapsed_hours(2), extra(7+).
-            # Trig features (3-6) are already in [-1, 1] and are left unchanged.
-            n_extra = len(self.config.extra_input_columns)
-            cont_cols = list(range(3)) + list(range(7, 7 + n_extra))
-            train_cont = train_batch.X[:, cont_cols]
-            x_mean = train_cont.mean(dim=0)
-            x_std = train_cont.std(dim=0).clamp(min=1e-6)
-
-            def _standardize(batch: TensorBatch) -> TensorBatch:
-                X_new = batch.X.clone()
-                X_new[:, cont_cols] = (batch.X[:, cont_cols] - x_mean) / x_std
-                return TensorBatch(
-                    X=X_new, y=batch.y, context=batch.context,
-                    M=batch.M, S=batch.S,
-                    missing_indicator=batch.missing_indicator,
-                    cost=batch.cost,
-                    sensor_metadata=batch.sensor_metadata,
-                    indices=batch.indices,
-                )
-
-            full_batch = _standardize(full_batch)
-            train_batch = _standardize(train_batch)
-            calibration_batch = _standardize(calibration_batch)
-            evaluation_batch = _standardize(evaluation_batch)
-
         return PreparedExperimentData(
             full=full_batch,
             train=train_batch,
@@ -828,114 +795,6 @@ class ResearchExperimentRunner:
             sensor_metadata=cls._slice_metadata_rows(batch.sensor_metadata, indices),
             indices=batch.indices[indices],
         )
-
-    @staticmethod
-    def _compute_statistical_baselines(
-        train_X: Tensor,
-        train_y: Tensor,
-        eval_X: Tensor,
-        eval_y: Tensor,
-    ) -> "dict[str, AblationOutcome]":
-        """Compute persistence (lag-24 h) and hourly-climatology baselines.
-
-        Both are deterministic forecasts; their CRPS equals MAE.
-        Results are injected into the ablations dict so reviewers can
-        compare SA-IDS against standard meteorological benchmarks.
-        """
-        import math as _math
-
-        eval_obs_mask = torch.isfinite(eval_y)
-        if not eval_obs_mask.any():
-            return {}
-
-        eval_X_obs = eval_X[eval_obs_mask]
-        eval_y_obs = eval_y[eval_obs_mask]
-
-        train_obs_mask = torch.isfinite(train_y)
-        if not train_obs_mask.any():
-            return {}
-
-        train_X_obs = train_X[train_obs_mask]
-        train_y_obs = train_y[train_obs_mask]
-
-        global_mean = float(train_y_obs.mean().item())
-
-        def _station_key(row: Tensor) -> tuple:
-            return (round(float(row[0]), 4), round(float(row[1]), 4))
-
-        def _hour_key(row: Tensor) -> int:
-            return round(_math.atan2(float(row[3]), float(row[4])) * 12.0 / _math.pi) % 24
-
-        # Build lookup tables from training rows
-        by_elapsed: dict[tuple, float] = {}
-        by_hour: dict[tuple, list] = {}
-        station_ys: dict[tuple, list] = {}
-
-        for i in range(train_X_obs.shape[0]):
-            sk = _station_key(train_X_obs[i])
-            elapsed = round(float(train_X_obs[i, 2]))
-            h = _hour_key(train_X_obs[i])
-            y_val = float(train_y_obs[i])
-
-            by_elapsed[(sk, elapsed)] = y_val
-
-            pair = (sk, h)
-            if pair not in by_hour:
-                by_hour[pair] = []
-            by_hour[pair].append(y_val)
-
-            if sk not in station_ys:
-                station_ys[sk] = []
-            station_ys[sk].append(y_val)
-
-        station_means = {sk: sum(ys) / len(ys) for sk, ys in station_ys.items()}
-
-        pers_preds: list[float] = []
-        clim_preds: list[float] = []
-
-        for i in range(eval_X_obs.shape[0]):
-            sk = _station_key(eval_X_obs[i])
-            elapsed_eval = round(float(eval_X_obs[i, 2]))
-            h = _hour_key(eval_X_obs[i])
-            fallback = station_means.get(sk, global_mean)
-
-            pers_preds.append(by_elapsed.get((sk, elapsed_eval - 24), fallback))
-
-            pair = (sk, h)
-            hour_ys = by_hour.get(pair)
-            clim_preds.append(sum(hour_ys) / len(hour_ys) if hour_ys else fallback)
-
-        def _point_metrics(preds: list[float]) -> dict[str, float]:
-            p = torch.tensor(preds, dtype=eval_y_obs.dtype, device=eval_y_obs.device)
-            residuals = eval_y_obs - p
-            rmse = float(torch.sqrt(torch.mean(residuals.pow(2))).item())
-            mae = float(torch.mean(residuals.abs()).item())
-            return {"rmse": rmse, "mae": mae, "crps": mae}
-
-        _report: dict[str, Any] = {
-            "use_m2": False, "use_m3": False, "use_m5": False,
-            "missingness_assumption": "n/a", "missingness_mode": "n/a",
-            "missingness_inference_strategy": "n/a", "state_training_strategy": "n/a",
-            "diagnosis_mode": "n/a", "diagnosis_representation": "n/a",
-            "diagnosis_temporal_model": "n/a", "diagnosis_curriculum": "n/a",
-            "diagnosis_latent_dynamics": "n/a", "reliability_mode": "n/a",
-            "reliability_relational": False, "reliability_graph_corel": False,
-            "reliability_graph_message_passing_steps": None,
-            "missingness_sensor_health_latent": False,
-            "policy_surrogate": "n/a", "policy_planning_strategy": "n/a",
-        }
-        return {
-            "persistence_24h_baseline": AblationOutcome(
-                variant_name="persistence_24h_baseline",
-                metrics=_point_metrics(pers_preds),
-                report=dict(_report),
-            ),
-            "climatology_hourly_baseline": AblationOutcome(
-                variant_name="climatology_hourly_baseline",
-                metrics=_point_metrics(clim_preds),
-                report=dict(_report),
-            ),
-        }
 
     @staticmethod
     def _row_cap_indices(num_rows: int, max_rows: int, *, device: torch.device) -> Tensor:
@@ -2035,11 +1894,6 @@ class ResearchExperimentRunner:
             variant_names=list(self.run_config.variant_names) if self.run_config.variant_names else None,
             batch_size=inference_batch_size,
         )
-        baselines = self._compute_statistical_baselines(
-            prepared.train.X, prepared.train.y,
-            prepared.evaluation.X, prepared.evaluation.y,
-        )
-        ablations = {**baselines, **ablations}
 
         sensitivity: dict[str, dict[str, float]]
         if pipeline.use_m3:
@@ -2396,12 +2250,6 @@ class ResearchExperimentRunner:
                     payload=payload,
                 ),
             )
-            if "persistence_24h_baseline" not in ablations:
-                baselines = self._compute_statistical_baselines(
-                    prepared.train.X, prepared.train.y,
-                    prepared.evaluation.X, prepared.evaluation.y,
-                )
-                ablations = {**baselines, **ablations}
 
             if pipeline.use_m3 and not sensitivity:
                 (

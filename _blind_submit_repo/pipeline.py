@@ -2150,20 +2150,12 @@ class SilenceAwareIDS(nn.Module):
             )
 
         _emit_progress_event(progress_callback, "metrics_start")
-        ensemble_samples = None
-        if (
-            self.use_m3
-            and self.missingness_model is not None
-            and self.missingness_model.config.inference_strategy == "joint_generative"
-        ):
-            ensemble_samples = scorer.draw_predictive_samples(mu, var)
         metrics = scorer.evaluate_gaussian_predictions(
             mu=mu,
             var=var,
             y_true=y_eval,
             lower=lower,
             upper=upper,
-            ensemble_samples=ensemble_samples,
         )
         _emit_progress_event(
             progress_callback,

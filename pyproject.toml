@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "sa-ids"
+version = "0.1.0"
+description = "Silence-Aware Information-Driven Sensing: A Cost-Reliability Optimization Framework"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Joseph Lee", email = "ha6602@gmail.com" }]
+requires-python = ">=3.11"
+keywords = [
+  "weather forecasting",
+  "sensor networks",
+  "Gaussian processes",
+  "active sensing",
+  "conformal prediction",
+  "environmental modelling",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+dependencies = [
+  "torch>=2.1",
+  "gpytorch>=1.11",
+  "pandas>=2,<3",
+  "xarray>=2024.1,<2027",
+  "netCDF4>=1.6,<2",
+  "cdsapi>=0.7,<1",
+  "matplotlib>=3.8,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+sa-ids = "task_cli.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/12JOSEPH21-star/SA-IDS-Framework"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["task_cli*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

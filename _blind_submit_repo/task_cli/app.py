@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import logging
 from datetime import date, datetime
 from pathlib import Path
 
@@ -22,12 +21,6 @@ def _iso_datetime(value: str) -> datetime:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run sensor-sparse weather observation experiments from a CSV dataset."
-    )
-    parser.add_argument(
-        "--log-level",
-        default="WARNING",
-        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
-        help="Root logging level written to stderr (default: WARNING).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -853,11 +846,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
 
     try:
         if args.command == "init":

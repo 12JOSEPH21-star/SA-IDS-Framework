@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Silence-Aware Information-Driven Sensing: A Cost-Reliability Optimization Framework"
+abstract: >
+  SA-IDS is a modular PyTorch/GPyTorch framework for sparse-sensor weather-network
+  experiments. It combines a sparse variational spatiotemporal Gaussian process (M1),
+  sequence-aware dynamic silence diagnosis (M2), heterogeneous MNAR missingness
+  modelling (M3), myopic and non-myopic active-sensing policies (M4), and graph-aware
+  conformal reliability (M5) into a unified ablation-ready pipeline.
+authors:
+  - family-names: "Lee"
+    given-names: "Joseph"
+    email: "ha6602@gmail.com"
+version: "0.1.0"
+date-released: "2026-05-15"
+license: MIT
+repository-code: "https://github.com/12JOSEPH21-star/SA-IDS-Framework"
+keywords:
+  - weather forecasting
+  - sensor networks
+  - Gaussian processes
+  - active sensing
+  - conformal prediction
+  - environmental modelling
+  - missingness modelling
+preferred-citation:
+  type: article
+  title: "Silence-Aware Information-Driven Sensing: A Cost-Reliability Optimization Framework"
+  authors:
+    - family-names: "Lee"
+      given-names: "Joseph"
+      email: "ha6602@gmail.com"
+  journal: "Environmental Modelling & Software"
+  year: 2026
+  status: submitted

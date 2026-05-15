@@ -570,41 +570,6 @@ class ConformalPredictor:
             - 1.0 / math.sqrt(math.pi)
         )
 
-    def ensemble_crps(self, samples: Tensor, y_true: Tensor) -> Tensor:
-        """Compute per-point CRPS from an ensemble via the energy-score identity.
-
-        CRPS(F, y) = E_X[|X - y|] - 0.5 * E_{X,X'}[|X - X'|]
-        where X, X' are iid draws from the predictive distribution F.
-
-        Args:
-            samples: Ensemble members with shape ``[K, N]`` (K members, N points).
-            y_true: Observations with shape ``[N]``.
-
-        Returns:
-            Per-point CRPS values with shape ``[N]``.
-        """
-        samples = samples.float()
-        y_true = y_true.view(-1).float()
-        spread = torch.mean(torch.abs(samples.unsqueeze(0) - samples.unsqueeze(1)), dim=(0, 1))
-        skill = torch.mean(torch.abs(samples - y_true.unsqueeze(0)), dim=0)
-        return skill - 0.5 * spread
-
-    def draw_predictive_samples(self, mu: Tensor, var: Tensor, n_samples: int = 128) -> Tensor:
-        """Draw samples from N(mu, var) for ensemble scoring.
-
-        Args:
-            mu: Predictive means with shape ``[N]``.
-            var: Predictive variances with shape ``[N]``.
-            n_samples: Number of ensemble members.
-
-        Returns:
-            Samples with shape ``[K, N]``.
-        """
-        mu = mu.view(-1)
-        sigma = torch.sqrt(torch.clamp(var.view(-1), min=self.config.variance_floor))
-        noise = torch.randn(n_samples, mu.shape[0], device=mu.device, dtype=mu.dtype)
-        return mu.unsqueeze(0) + sigma.unsqueeze(0) * noise
-
     def evaluate_gaussian_predictions(
         self,
         mu: Tensor,
@@ -613,7 +578,6 @@ class ConformalPredictor:
         *,
         lower: Tensor | None = None,
         upper: Tensor | None = None,
-        ensemble_samples: Tensor | None = None,
     ) -> PredictiveMetrics:
         """Evaluate Gaussian predictions using proper scoring rules and coverage.
 
@@ -623,11 +587,6 @@ class ConformalPredictor:
             y_true: Targets with shape `[N]`.
             lower: Optional lower interval bounds with shape `[N]`.
             upper: Optional upper interval bounds with shape `[N]`.
-            ensemble_samples: Optional pre-drawn samples with shape ``[K, N]``.
-                When provided (e.g. for ``joint_generative`` paths where the
-                predictive distribution is a non-Gaussian mixture), the
-                ensemble energy-score CRPS replaces the closed-form Gaussian
-                CRPS.  The log-score still uses the Gaussian approximation.
 
         Returns:
             Aggregated predictive metrics.
@@ -637,10 +596,7 @@ class ConformalPredictor:
         y_true = y_true.view(-1)
         rmse = torch.sqrt(torch.mean((y_true - mu).pow(2)))
         mae = torch.mean(torch.abs(y_true - mu))
-        if ensemble_samples is not None:
-            crps = torch.mean(self.ensemble_crps(ensemble_samples, y_true))
-        else:
-            crps = torch.mean(self.gaussian_crps(mu=mu, var=var, y_true=y_true))
+        crps = torch.mean(self.gaussian_crps(mu=mu, var=var, y_true=y_true))
         log_score = torch.mean(self.gaussian_log_score(mu=mu, var=var, y_true=y_true))
 
         coverage_value: float | None = None
